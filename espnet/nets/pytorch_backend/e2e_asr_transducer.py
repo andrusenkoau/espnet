@@ -351,7 +351,8 @@ class E2E(ASRInterface, torch.nn.Module):
 
         self.reporter = Reporter()
 
-        self.criterion = TransLoss(args.trans_type, self.blank_id)
+        # self.criterion = TransLoss(args.trans_type, self.blank_id)
+        self.criterion = TransLoss("warp-transducer", self.blank_id)
 
         self.default_parameters(args)
 

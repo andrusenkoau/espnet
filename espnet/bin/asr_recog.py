@@ -151,6 +151,27 @@ def get_parser():
         default=True,
         help="Normalize transducer scores by length",
     )
+    parser.add_argument(
+        "--transducer-pruning-state-beam-margin",
+        type=float,
+        default=0.0,
+        help="""Beam pruning margin to interrupt hypotheses expansions when the best
+                        current hypothesis is worse by more than the margin from the
+                        best previous hypothesis. Smaller magin makes decoding faster,
+                        but may increase search errors.
+                        If margin=0.0 (default), this function is disabled""",
+    )
+    parser.add_argument(
+        "--transducer-pruning-expand-beam-margin",
+        type=float,
+        default=0.0,
+        help="""Beam pruning margin to limit number of expanded hypothesises by
+                        discarding those which current probabilities are worse by more
+                        than the margin from the best current non-blank probability.
+                        Smaller magin makes decoding faster, but may increase search
+                        errors.
+                        If margin=0.0 (default), this function is disabled""",
+    )
     # rnnlm related
     parser.add_argument(
         "--rnnlm", type=str, default=None, help="RNNLM model file to read"
