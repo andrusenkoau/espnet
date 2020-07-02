@@ -291,19 +291,23 @@ class DecoderRNNT(torch.nn.Module):
                 )
 
                 ytu = F.log_softmax(self.joint(hi, y[0]), dim=0)
-
-                # best_non_blank_prob = max(ytu[:self.blank] + ytu[self.blank + 1:])
-                best_non_blank_prob = max(
-                    ytu[[i for i in six.moves.range(self.odim) if i != self.blank]]
-                )
+                
                 if rnnlm:
                     rnnlm_state, rnnlm_scores = rnnlm.predict(
                         new_hyp["lm_state"], vy[0]
                     )
-                    best_non_blank_prob += (
-                        recog_args.lm_weight * rnnlm_scores[0][self.blank]
+                
+                if expand_beam > 0.0:
+                    best_non_blank_prob = max(
+                        ytu[[i for i in six.moves.range(self.odim) if i != self.blank]]
                     )
-                expand_bound = best_non_blank_prob - expand_beam
+                    if rnnlm:
+                        best_non_blank_prob += (
+                            recog_args.lm_weight * rnnlm_scores[0][self.blank]
+                        )
+                    expand_bound = best_non_blank_prob - expand_beam
+                else:
+                    expand_bound = float("-inf")
 
                 for k in six.moves.range(self.odim):
                     if k == self.blank:
