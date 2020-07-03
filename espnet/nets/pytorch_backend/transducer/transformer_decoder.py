@@ -19,6 +19,22 @@ from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
 from espnet.nets.pytorch_backend.transformer.repeat import repeat
 
 
+def _add_new_hyp(hyp_list, new_hyp):
+    """Add new hypothesis to a list or replace if the list contains an equevalent"""
+    if hyp_list:
+        for hyp in hyp_list:
+            if hyp["yseq"] == new_hyp["yseq"]:
+                if hyp["score"] >= new_hyp["score"]:
+                    return hyp_list
+                else:
+                    hyp_list.remove(hyp)
+                    hyp_list.append(new_hyp)
+                    return hyp_list
+    hyp_list.append(new_hyp)
+
+    return hyp_list
+
+
 class Decoder(torch.nn.Module):
     """Decoder module for transformer-transducer models.
 
@@ -229,6 +245,8 @@ class Decoder(torch.nn.Module):
         k_range = min(beam, self.odim)
         nbest = recog_args.nbest
         normscore = recog_args.score_norm_transducer
+        state_beam = recog_args.transducer_pruning_state_beam_margin
+        expand_beam = recog_args.transducer_pruning_expand_beam_margin
 
         if rnnlm:
             kept_hyps = [
@@ -243,6 +261,13 @@ class Decoder(torch.nn.Module):
 
             while True:
                 new_hyp = max(hyps, key=lambda x: x["score"])
+
+                if state_beam > 0.0 and kept_hyps:
+                    h_best_prob = new_hyp["score"]
+                    kh_best_prob = max(kept_hyps, key=lambda x: x["score"])["score"]
+                    if kh_best_prob >= h_best_prob + state_beam:
+                        break
+
                 hyps.remove(new_hyp)
 
                 ys = to_device(self, torch.tensor(new_hyp["yseq"]).unsqueeze(0))
@@ -258,29 +283,48 @@ class Decoder(torch.nn.Module):
                         new_hyp["lm_state"], ys[:, -1]
                     )
 
-                for k in six.moves.range(self.odim):
-                    beam_hyp = {
-                        "score": new_hyp["score"] + float(ytu[k]),
-                        "yseq": new_hyp["yseq"][:],
-                        "cache": new_hyp["cache"],
-                    }
-
+                if expand_beam > 0.0:
+                    best_non_blank_prob = max(
+                        ytu[[i for i in six.moves.range(self.odim) if i != self.blank]]
+                    )
                     if rnnlm:
-                        beam_hyp["lm_state"] = new_hyp["lm_state"]
+                        best_non_blank_prob += (
+                            recog_args.lm_weight * rnnlm_scores[0][self.blank]
+                        )
+                    expand_bound = best_non_blank_prob - expand_beam
+                else:
+                    expand_bound = float("-inf")
 
+                for k in six.moves.range(self.odim):
                     if k == self.blank:
-                        kept_hyps.append(beam_hyp)
-                    else:
-                        beam_hyp["yseq"].append(int(k))
-                        beam_hyp["cache"] = c
+                        beam_hyp = {
+                            "score": new_hyp["score"] + float(ytu[k]),
+                            "yseq": new_hyp["yseq"][:],
+                            "cache": new_hyp["cache"],
+                        }
 
                         if rnnlm:
-                            beam_hyp["lm_state"] = rnnlm_state
-                            beam_hyp["score"] += (
+                            beam_hyp["lm_state"] = new_hyp["lm_state"]
+
+                        _add_new_hyp(kept_hyps, beam_hyp
+                    else:
+                        current_prob = float(ytu[k])
+                        if rnnlm:
+                            current_prob += (
                                 recog_args.lm_weight * rnnlm_scores[0][k]
                             )
 
-                        hyps.append(beam_hyp)
+                        if current_prob >= expand_bound:
+                            beam_hyp = {
+                                "score": new_hyp["score"] + current_prob,
+                                "yseq": new_hyp["yseq"][:] + [int(k)],
+                                "cache": c,
+                            }
+
+                            if rnnlm:
+                                beam_hyp["lm_state"] = rnnlm_state
+
+                            hyps.append(beam_hyp)
 
                 if len(kept_hyps) >= k_range:
                     break
