@@ -306,7 +306,7 @@ class Decoder(torch.nn.Module):
                         if rnnlm:
                             beam_hyp["lm_state"] = new_hyp["lm_state"]
 
-                        _add_new_hyp(kept_hyps, beam_hyp
+                        _add_new_hyp(kept_hyps, beam_hyp)
                     else:
                         current_prob = float(ytu[k])
                         if rnnlm:
