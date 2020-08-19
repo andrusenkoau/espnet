@@ -429,6 +429,19 @@ def train(args):
         mtl_mode = "mtl"
         logging.info("Multitask learning mode")
 
+    # initialize CTC-CRF denominator fst
+    if args.ctc_type == "ctc-crf":
+        if not torch.cuda.is_available():
+            raise RuntimeError("ctc-crf training on CPU is not supported")
+        if not args.ctc_crf_den_lm or not os.path.isfile(args.ctc_crf_den_lm):
+            raise ValueError("ctc_crf_den_lm path must be valid")
+        import ctc_crf_base
+        cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if cvd is None:
+            raise RuntimeError("CUDA_VISIBLE_DEVICES must be set.")
+        TARGET_GPUS = list(map(int, cvd.split(",")))
+        gpus = torch.IntTensor(TARGET_GPUS)
+        ctc_crf_base.init_env(args.ctc_crf_den_lm, gpus)
     if (args.enc_init is not None or args.dec_init is not None) and args.num_encs == 1:
         model = load_trained_modules(idim_list[0], odim, args)
     else:
@@ -879,7 +892,10 @@ def train(args):
     trainer.run()
     check_early_stop(trainer, args.epochs)
 
-
+    # deinitialize CTC-CRF denominator fst
+    if args.ctc_type == "ctc-crf":
+        import ctc_crf_base
+        ctc_crf_base.release_env(gpus)
 def recog(args):
     """Decode with the given args.
 

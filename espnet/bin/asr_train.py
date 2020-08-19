@@ -139,8 +139,17 @@ def get_parser(parser=None, required=True):
         "--ctc_type",
         default="warpctc",
         type=str,
-        choices=["builtin", "warpctc"],
+        choices=["builtin", "warpctc", "ctc-crf"],
         help="Type of CTC implementation to calculate loss.",
+    )
+    parser.add_argument(
+        "--ctc-crf-lamb", default=0.1, type=float, help="TBD"
+    )
+    parser.add_argument(
+        "--ctc-crf-den-lm",
+        default=None,
+        type=str,
+        help="CTC-CRF denominator fst path",
     )
     parser.add_argument(
         "--mtlalpha",
