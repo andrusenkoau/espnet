@@ -765,18 +765,20 @@ class E2E(ASRInterface, torch.nn.Module):
 
         return [hyp]
 
-    def calculate_all_attentions(self, xs_pad, ilens, ys_pad):
+    def calculate_all_attentions(self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None):
         """E2E attention calculation.
 
         :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax, idim)
         :param torch.Tensor ilens: batch of lengths of input sequences (B)
         :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: attention weights (B, H, Lmax, Tmax)
         :rtype: float ndarray
         """
         self.eval()
         with torch.no_grad():
-            self.forward(xs_pad, ilens, ys_pad)
+            self.forward(xs_pad, ilens, ys_pad, ctc_crf_path_weights)
         ret = dict()
         for name, m in self.named_modules():
             if (
@@ -791,12 +793,14 @@ class E2E(ASRInterface, torch.nn.Module):
         self.train()
         return ret
 
-    def calculate_all_ctc_probs(self, xs_pad, ilens, ys_pad):
+    def calculate_all_ctc_probs(self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None):
         """E2E CTC probability calculation.
 
         :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax)
         :param torch.Tensor ilens: batch of lengths of input sequences (B)
         :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: CTC probability (B, Tmax, vocab)
         :rtype: float ndarray
         """
@@ -806,7 +810,7 @@ class E2E(ASRInterface, torch.nn.Module):
 
         self.eval()
         with torch.no_grad():
-            self.forward(xs_pad, ilens, ys_pad)
+            self.forward(xs_pad, ilens, ys_pad, ctc_crf_path_weights)
         for name, m in self.named_modules():
             if isinstance(m, CTC) and m.probs is not None:
                 ret = m.probs.cpu().numpy()
