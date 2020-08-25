@@ -21,6 +21,7 @@ from espnet.nets.pytorch_backend.e2e_asr import CTC_LOSS_THRESHOLD
 from espnet.nets.pytorch_backend.e2e_asr import Reporter
 from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.pytorch_backend.nets_utils import th_accuracy
 from espnet.nets.pytorch_backend.rnn.decoders import CTC_SCORING_RATIO
 from espnet.nets.pytorch_backend.transformer.add_sos_eos import add_sos_eos
@@ -44,6 +45,7 @@ from espnet.nets.scorers.ctc import CTCPrefixScorer
 from espnet.utils.fill_missing_args import fill_missing_args
 
 
+
 class E2E(ASRInterface, torch.nn.Module):
     """E2E module.
 
@@ -57,6 +59,7 @@ class E2E(ASRInterface, torch.nn.Module):
     def add_arguments(parser):
         """Add arguments."""
         group = parser.add_argument_group("transformer model setting")
+
 
         group.add_argument(
             "--transformer-init",
@@ -299,6 +302,7 @@ class E2E(ASRInterface, torch.nn.Module):
         else:
             self.ctc = None
 
+
         if args.report_cer or args.report_wer:
             self.error_calculator = ErrorCalculator(
                 args.char_list,
@@ -316,12 +320,15 @@ class E2E(ASRInterface, torch.nn.Module):
         # initialize parameters
         initialize(self, args.transformer_init)
 
-    def forward(self, xs_pad, ilens, ys_pad):
+
+    def forward(self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None):
         """E2E forward.
 
         :param torch.Tensor xs_pad: batch of padded source sequences (B, Tmax, idim)
         :param torch.Tensor ilens: batch of lengths of source sequences (B)
         :param torch.Tensor ys_pad: batch of padded target sequences (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: ctc loss value
         :rtype: torch.Tensor
         :return: attention loss value
@@ -375,6 +382,7 @@ class E2E(ASRInterface, torch.nn.Module):
             if not self.training:
                 self.ctc.softmax(hs_pad)
 
+
         # 5. compute cer/wer
         if self.training or self.error_calculator is None or self.decoder is None:
             cer, wer = None, None
@@ -398,6 +406,10 @@ class E2E(ASRInterface, torch.nn.Module):
             loss_ctc_data = float(loss_ctc)
 
         loss_data = float(self.loss)
+        if ctc_crf_path_weights:
+            path_weight = numpy.mean([float(i) for i in ctc_crf_path_weights[0]])
+            loss_ctc_data -= path_weight
+            loss_data -= alpha * path_weight
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
             self.reporter.report(
                 loss_ctc_data, loss_att_data, self.acc, cer_ctc, cer, wer, loss_data
@@ -422,6 +434,26 @@ class E2E(ASRInterface, torch.nn.Module):
         enc_output, _ = self.encoder(x, None)
         return enc_output.squeeze(0)
 
+    def encode_batch(self, xs):
+        """Encode acoustic features.
+
+        :param list xs: list of input acoustic feature arrays [(T_1, D), (T_2, D), ...]
+        :return: batch of encoder outputs (B, Tmax, hdim)
+        :rtype: torch.Tensor
+        """
+        self.eval()
+        ilens = np.fromiter((xx.shape[0] for xx in xs), dtype=np.int64)
+
+        # subsample frame
+        xs = [xx[:: self.subsample[0], :] for xx in xs]
+        xs = [to_device(self, to_torch_tensor(xx).float()) for xx in xs]
+        xs_pad = pad_list(xs, 0.0)
+
+        # encoder
+        src_mask = make_non_pad_mask(ilens.tolist()).to(xs_pad.device).unsqueeze(-2)
+        hs_pad, hs_mask = self.encoder(encoder, src_mask)
+        hlens = hs_mask.view(batch_size, -1).sum(1)
+        return hs_pad, hlens
     def recognize(self, x, recog_args, char_list=None, rnnlm=None, use_jit=False):
         """Recognize input speech.
 

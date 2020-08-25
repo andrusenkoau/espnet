@@ -2,8 +2,12 @@
 
 import json
 import logging
+import numpy as np
+import sys
 
 import torch
+
+from kaldiio import WriteHelper
 
 from espnet.asr.asr_utils import add_results_to_json
 from espnet.asr.asr_utils import get_model_conf
@@ -18,6 +22,10 @@ from espnet.nets.scorers.length_bonus import LengthBonus
 from espnet.utils.deterministic_utils import set_deterministic_pytorch
 from espnet.utils.io_utils import LoadInputsAndTargets
 
+if sys.version_info[0] == 2:
+    from itertools import izip_longest as zip_longest
+else:
+    from itertools import zip_longest as zip_longest
 
 def recog_v2(args):
     """Decode with custom models that implements ScorerInterface.
@@ -150,3 +158,72 @@ def recog_v2(args):
                 {"utts": new_js}, indent=4, ensure_ascii=False, sort_keys=True
             ).encode("utf_8")
         )
+
+def calc_logits(args):
+    """Infer logits into kaldi matrix.
+
+    Args:
+        args (namespace): The program arguments.
+        See py:func:`espnet.bin.asr_recog.get_parser` for details
+
+    """
+    set_deterministic_pytorch(args)
+    model, train_args = load_trained_model(args.model)
+    assert isinstance(model, ASRInterface)
+    model.eval()
+
+    if model.mtlalpha != 1:
+        raise NotImplementedError("Only pure ctc mode is supported")
+
+    load_inputs_and_targets = LoadInputsAndTargets(
+        mode="asr",
+        load_output=False,
+        sort_in_input_length=False,
+        preprocess_conf=train_args.preprocess_conf
+        if args.preprocess_conf is None
+        else args.preprocess_conf,
+        preprocess_args={"train": False},
+    )
+
+    if args.ngpu == 1:
+        device = "cuda"
+    else:
+        device = "cpu"
+
+    dtype = getattr(torch, args.dtype)
+    logging.info(f"Decoding device={device}, dtype={dtype}")
+    model.to(device=device, dtype=dtype).eval()
+
+    # NOTE: for a compatibility with zero batchsize
+    batchsize = args.batchsize if args.batchsize > 0 else 1
+
+    # read json data
+    with open(args.recog_json, "rb") as f:
+        js = json.load(f)["utts"]
+
+    def grouper(n, iterable, fillvalue=None):
+            kargs = [iter(iterable)] * n
+            return zip_longest(*kargs, fillvalue=fillvalue)
+
+    with torch.no_grad(), WriteHelper(args.result_mat, compression_method=2) as writer:
+        # sort data if batchsize > 1
+        keys = list(js.keys())
+        if batchsize > 1:
+            feat_lens = [js[key]["input"][0]["shape"][0] for key in keys]
+            sorted_index = sorted(range(len(feat_lens)), key=lambda i: -feat_lens[i])
+            keys = [keys[i] for i in sorted_index]
+        for names in grouper(batchsize, keys, None):
+            names = [name for name in names if name]
+            batch = [(name, js[name]) for name in names]
+            feats = (
+                load_inputs_and_targets(batch)[0]
+                if args.num_encs == 1
+                else load_inputs_and_targets(batch)
+            )
+            hs_pad, hlens = model.encode_batch(feats)
+            logits_pad = model.ctc.log_softmax(hs_pad)
+            for i in range(len(names)):
+                logit = logits_pad[i, : hlens[i]]
+                logit = logit.cpu().data.numpy()
+                logit[logit == -np.inf] = -1e16
+                writer(names[i], logit)

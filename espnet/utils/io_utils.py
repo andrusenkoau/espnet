@@ -35,6 +35,8 @@ class LoadInputsAndTargets(object):
     :param: bool use_second_target: Used for tts mode only
     :param: dict preprocess_args: Set some optional arguments for preprocessing
     :param: Optional[dict] preprocess_args: Used for tts mode only
+    :param: Optional[list] load_auxiliary_output: A list of json output names to
+        load in addition to targets
     """
 
     def __init__(
@@ -48,6 +50,7 @@ class LoadInputsAndTargets(object):
         use_second_target=False,
         preprocess_args=None,
         keep_all_data_on_mem=False,
+        load_auxiliary_output=None,
     ):
         self._loaders = {}
         if mode not in ["asr", "tts", "mt", "vc"]:
@@ -82,6 +85,7 @@ class LoadInputsAndTargets(object):
         self.sort_in_input_length = sort_in_input_length
         self.use_speaker_embedding = use_speaker_embedding
         self.use_second_target = use_second_target
+        self.load_auxiliary_output = load_auxiliary_output
         if preprocess_args is None:
             self.preprocess_args = {}
         else:
@@ -157,7 +161,12 @@ class LoadInputsAndTargets(object):
                         )
 
                     y_feats_dict.setdefault(inp["name"], []).append(x)
-
+                    if self.load_auxiliary_output:
+                        for field in self.load_auxiliary_output:
+                            if field in inp:
+                                y_feats_dict.setdefault(field, []).append(inp[field])
+                            else:
+                                raise ValueError("Field {} not found in {}".format(field, uttid))
         if self.mode == "asr":
             return_batch, uttid_list = self._create_batch_asr(
                 x_feats_dict, y_feats_dict, uttid_list

@@ -143,7 +143,7 @@ def get_parser(parser=None, required=True):
         help="Type of CTC implementation to calculate loss.",
     )
     parser.add_argument(
-        "--ctc-crf-lamb", default=0.1, type=float, help="TBD"
+        "--ctc-crf-lamb", default=0.1, type=float, help="CTC loss weight of CTC-CRF loss computation."
     )
     parser.add_argument(
         "--ctc-crf-den-lm",
