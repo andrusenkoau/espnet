@@ -50,9 +50,9 @@ PIP_CHAINER := chainer==$(CHAINER_VERSION)
 all: kaldi showenv python conda_packages.done check_install
 
 ifneq ($(strip $(CHAINER_VERSION)),)
-python: activate_python.sh warp-ctc.done warp-transducer.done espnet.done pytorch.done chainer_ctc.done chainer.done
+python: activate_python.sh warp-ctc.done warp-transducer.done ctc-crf.done espnet.done pytorch.done chainer_ctc.done chainer.done
 else
-python: activate_python.sh warp-ctc.done warp-transducer.done espnet.done pytorch.done
+python: activate_python.sh warp-ctc.done warp-transducer.done ctc-crf.done espnet.done pytorch.done
 endif
 
 extra: nkf.done moses.done mwerSegmenter.done pesq kenlm.done
@@ -146,6 +146,10 @@ warp-transducer.done: pytorch.done conda_packages.done
 	. ./activate_python.sh && ./installers/install_warp-transducer.sh
 	touch warp-transducer.done
 
+ctc-crf.done: pytorch.done conda_packages.done
+	. ./activate_python.sh && ./installers/install_ctc-crf.sh
+	touch ctc-crf.done
+
 chainer_ctc.done: chainer.done
 	. ./activate_python.sh && ./installers/install_chainer_ctc.sh
 	touch chainer_ctc.done
@@ -196,13 +200,13 @@ endif
 
 
 clean: clean_extra
-	rm -rf warp-ctc warp-transducer chainer_ctc
+	rm -rf warp-ctc warp-transducer chainer_ctc ctc-crf
 	rm -rf *.done
 	find . -iname "*.pyc" -delete
 
 clean_python:
-	rm -rf warp-ctc warp-transducer chainer_ctc
-	rm -f warp-ctc.done chainer_ctc.done espnet.done chainer.done pytorch.done warp-transducer.done
+	rm -rf warp-ctc warp-transducer chainer_ctc ctc-crf
+	rm -f warp-ctc.done chainer_ctc.done espnet.done chainer.done pytorch.done warp-transducer.done ctc-crf.done
 	find . -iname "*.pyc" -delete
 
 clean_extra:
