@@ -200,12 +200,12 @@ endif
 
 
 clean: clean_extra
-	rm -rf warp-ctc warp-transducer chainer_ctc ctc-crf
+	rm -rf warp-ctc warp-transducer chainer_ctc CAT
 	rm -rf *.done
 	find . -iname "*.pyc" -delete
 
 clean_python:
-	rm -rf warp-ctc warp-transducer chainer_ctc ctc-crf
+	rm -rf warp-ctc warp-transducer chainer_ctc CAT
 	rm -f warp-ctc.done chainer_ctc.done espnet.done chainer.done pytorch.done warp-transducer.done ctc-crf.done
 	find . -iname "*.pyc" -delete
 
