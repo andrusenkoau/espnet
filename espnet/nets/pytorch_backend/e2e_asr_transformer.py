@@ -23,6 +23,8 @@ from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
 from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.pytorch_backend.nets_utils import th_accuracy
+from espnet.nets.pytorch_backend.nets_utils import to_device
+from espnet.nets.pytorch_backend.nets_utils import to_torch_tensor
 from espnet.nets.pytorch_backend.rnn.decoders import CTC_SCORING_RATIO
 from espnet.nets.pytorch_backend.transformer.add_sos_eos import add_sos_eos
 from espnet.nets.pytorch_backend.transformer.add_sos_eos import mask_uniform
@@ -442,7 +444,7 @@ class E2E(ASRInterface, torch.nn.Module):
         :rtype: torch.Tensor
         """
         self.eval()
-        ilens = np.fromiter((xx.shape[0] for xx in xs), dtype=np.int64)
+        ilens = numpy.fromiter((xx.shape[0] for xx in xs), dtype=numpy.int64)
 
         # subsample frame
         xs = [xx[:: self.subsample[0], :] for xx in xs]
@@ -451,8 +453,8 @@ class E2E(ASRInterface, torch.nn.Module):
 
         # encoder
         src_mask = make_non_pad_mask(ilens.tolist()).to(xs_pad.device).unsqueeze(-2)
-        hs_pad, hs_mask = self.encoder(encoder, src_mask)
-        hlens = hs_mask.view(batch_size, -1).sum(1)
+        hs_pad, hs_mask = self.encoder(xs_pad, src_mask)
+        hlens = hs_mask.view(hs_pad.size(0), -1).sum(1)
         return hs_pad, hlens
     def recognize(self, x, recog_args, char_list=None, rnnlm=None, use_jit=False):
         """Recognize input speech.

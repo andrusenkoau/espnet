@@ -172,8 +172,10 @@ def calc_logits(args):
     assert isinstance(model, ASRInterface)
     model.eval()
 
-    if model.mtlalpha != 1:
-        raise NotImplementedError("Only pure ctc mode is supported")
+    if model.mtlalpha == 0:
+        raise NotImplementedError("Only pure attention mode is not supported")
+    elif model.mtlalpha < 1:
+        logging.warning("Attention decoder is ignored.")
 
     load_inputs_and_targets = LoadInputsAndTargets(
         mode="asr",

@@ -10,6 +10,7 @@ import configargparse
 import logging
 import os
 import random
+import subprocess
 import sys
 
 import numpy as np
@@ -133,6 +134,17 @@ def main(args):
             logging.error("The program only supports ngpu=1.")
             sys.exit(1)
 
+        # trying to recover from the run.pl's CUDA_VISIBLE_DEVICES shifted allocation
+        ngpu_command = "nvidia-smi --query-gpu=name --format=csv,noheader | wc -l"
+        sys_ngpu = subprocess.Popen([ngpu_command], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        sys_ngpu = int(sys_ngpu[0].decode("utf-8").split("\n")[0])
+        cvd = int(cvd)
+        if cvd == sys_ngpu:
+            logging.warning("CUDA_VISIBLE_DEVICES is set to a non-existing device. Overwritten as '0'.")
+            os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        elif cvd > sys_ngpu:
+            logging.error("CUDA_VISIBLE_DEVICES is set to a non-existing device.")
+            sys.exit(1)
     # display PYTHONPATH
     logging.info("python path = " + os.environ.get("PYTHONPATH", "(None)"))
 
