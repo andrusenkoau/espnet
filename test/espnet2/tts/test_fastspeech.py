@@ -10,10 +10,14 @@ from espnet2.tts.fastspeech import FastSpeech
     "spk_embed_dim, spk_embed_integration_type",
     [(None, "add"), (2, "add"), (2, "concat")],
 )
+@pytest.mark.parametrize("encoder_type", ["transformer", "conformer"])
+@pytest.mark.parametrize("decoder_type", ["transformer", "conformer"])
 @pytest.mark.parametrize("use_gst", [True, False])
 def test_fastspeech(
     postnet_layers,
     reduction_factor,
+    encoder_type,
+    decoder_type,
     spk_embed_dim,
     spk_embed_integration_type,
     use_gst,
@@ -31,6 +35,8 @@ def test_fastspeech(
         postnet_chans=4,
         postnet_filts=5,
         reduction_factor=reduction_factor,
+        encoder_type=encoder_type,
+        decoder_type=decoder_type,
         spk_embed_dim=spk_embed_dim,
         spk_embed_integration_type=spk_embed_integration_type,
         use_gst=use_gst,
@@ -61,7 +67,9 @@ def test_fastspeech(
     with torch.no_grad():
         model.eval()
 
-        inputs = dict(text=torch.randint(0, 10, (2,)),)
+        inputs = dict(
+            text=torch.randint(0, 10, (2,)),
+        )
         if use_gst:
             inputs.update(speech=torch.randn(5, 5))
         if spk_embed_dim is not None:
