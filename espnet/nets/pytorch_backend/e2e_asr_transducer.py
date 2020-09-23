@@ -6,11 +6,13 @@ import math
 
 import chainer
 from chainer import reporter
+import numpy as np
 import torch
 
 from espnet.nets.asr_interface import ASRInterface
 from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.pytorch_backend.nets_utils import to_device
 from espnet.nets.pytorch_backend.nets_utils import to_torch_tensor
 from espnet.nets.pytorch_backend.rnn.attentions import att_for
@@ -449,6 +451,25 @@ class E2E(ASRInterface, torch.nn.Module):
 
         return enc_output.squeeze(0)
 
+    def encode_transformer_batch(self, xs):
+        """Encode acoustic features.
+
+        :param list xs: list of input acoustic feature arrays [(T_1, D), (T_2, D), ...]
+        :return: batch of encoder outputs (B, Tmax, hdim)
+        :rtype: torch.Tensor
+        """
+        self.eval()
+        ilens = np.fromiter((xx.shape[0] for xx in xs), dtype=np.int64)
+
+        xs = [to_device(self, to_torch_tensor(xx).float()) for xx in xs]
+        xs_pad = pad_list(xs, 0.0)
+
+        # encoder
+        src_mask = make_non_pad_mask(ilens.tolist()).to(xs_pad.device).unsqueeze(-2)
+        hs_pad, hs_mask = self.encoder(xs_pad, src_mask)
+        hlens = hs_mask.view(hs_pad.size(0), -1).sum(1)
+        return hs_pad, hlens
+
     def encode_rnn(self, x):
         """Encode acoustic features.
 
@@ -470,6 +491,26 @@ class E2E(ASRInterface, torch.nn.Module):
         h, _, _ = self.enc(hs, ilens)
 
         return h[0]
+
+    def encode_rnn_batch(self, xs):
+        """Encode acoustic features.
+
+        :param list xs: list of input acoustic feature arrays [(T_1, D), (T_2, D), ...]
+        :return: batch of encoder outputs (B, Tmax, hdim)
+        :rtype: torch.Tensor
+        """
+        self.eval()
+        ilens = np.fromiter((xx.shape[0] for xx in xs), dtype=np.int64)
+
+        # subsample frame
+        xs = [xx[:: self.subsample[0], :] for xx in xs]
+        xs = [to_device(self, to_torch_tensor(xx).float()) for xx in xs]
+        xs_pad = pad_list(xs, 0.0)
+
+        # 1. Encoder
+        hs_pad, hlens, _ = self.enc(xs_pad, ilens)
+
+        return hs_pad, hlens
 
     def recognize(self, x, recog_args, char_list=None, rnnlm=None):
         """Recognize input features.

@@ -456,6 +456,7 @@ class E2E(ASRInterface, torch.nn.Module):
         hs_pad, hs_mask = self.encoder(xs_pad, src_mask)
         hlens = hs_mask.view(hs_pad.size(0), -1).sum(1)
         return hs_pad, hlens
+
     def recognize(self, x, recog_args, char_list=None, rnnlm=None, use_jit=False):
         """Recognize input speech.
 

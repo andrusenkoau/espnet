@@ -535,6 +535,7 @@ class E2E(ASRInterface, torch.nn.Module):
         # 1. Encoder
         hs_pad, hlens, _ = self.enc(hs_pad, hlens)
         return hs_pad, hlens
+
     def recognize(self, x, recog_args, char_list, rnnlm=None):
         """E2E beam search.
 

@@ -120,6 +120,8 @@ def main(args):
         )
         logging.warning("Skip DEBUG/INFO messages")
 
+    # prevent memory leak when using cpu
+    os.environ['LRU_CACHE_CAPACITY'] = '1'
     # check CUDA_VISIBLE_DEVICES
     if args.ngpu > 0:
         cvd = os.environ.get("CUDA_VISIBLE_DEVICES")

@@ -172,10 +172,11 @@ def calc_logits(args):
     assert isinstance(model, ASRInterface)
     model.eval()
 
-    if model.mtlalpha == 0:
-        raise NotImplementedError("Only pure attention mode is not supported")
-    elif model.mtlalpha < 1:
-        logging.warning("Attention decoder is ignored.")
+    if hasattr(model, 'mtlalpha'):
+        if model.mtlalpha == 0:
+            raise NotImplementedError("Only pure attention mode is not supported")
+        elif model.mtlalpha < 1:
+            logging.warning("Attention decoder is ignored.")
 
     load_inputs_and_targets = LoadInputsAndTargets(
         mode="asr",
@@ -204,8 +205,26 @@ def calc_logits(args):
         js = json.load(f)["utts"]
 
     def grouper(n, iterable, fillvalue=None):
-            kargs = [iter(iterable)] * n
-            return zip_longest(*kargs, fillvalue=fillvalue)
+        kargs = [iter(iterable)] * n
+        return zip_longest(*kargs, fillvalue=fillvalue)
+
+    def calc_logits_ctc(model, feats):
+        hs_pad, hlens = model.encode_batch(feats)
+        logits_pad = model.ctc.log_softmax(hs_pad)
+        return logits_pad, hlens
+
+    def calc_logits_transducer(model, feats):
+        if model.etype == "transformer":
+            hs_pad, hlens = model.encode_transformer_batch(feats)
+        else:
+            hs_pad, hlens = model.encode_rnn_batch(feats)
+        if model.dtype == "transformer":
+            logits_pad = model.decoder.calc_logits_batch(hs_pad, hlens)
+        else:
+            logits_pad = model.dec.calc_logits_batch(hs_pad, hlens)
+        return logits_pad, hlens
+
+    calc_logits_func = calc_logits_transducer if "transducer" in train_args.model_module else calc_logits_ctc
 
     with torch.no_grad(), WriteHelper(args.result_mat, compression_method=2) as writer:
         # sort data if batchsize > 1
@@ -222,8 +241,7 @@ def calc_logits(args):
                 if args.num_encs == 1
                 else load_inputs_and_targets(batch)
             )
-            hs_pad, hlens = model.encode_batch(feats)
-            logits_pad = model.ctc.log_softmax(hs_pad)
+            logits_pad, hlens = calc_logits_func(model, feats)
             for i in range(len(names)):
                 logit = logits_pad[i, : hlens[i]]
                 logit = logit.cpu().data.numpy()

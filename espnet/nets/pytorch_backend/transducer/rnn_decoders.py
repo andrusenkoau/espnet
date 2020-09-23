@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from espnet.nets.pytorch_backend.rnn.attentions import att_to_numpy
 
+from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
 from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.pytorch_backend.nets_utils import to_device
 
@@ -175,6 +176,54 @@ class DecoderRNNT(torch.nn.Module):
         z = self.joint(h_enc, h_dec)
 
         return z
+
+    def calc_logits_batch(self, hs_pad, hlens):
+        """Greedy search logits calculation.
+
+        Args:
+            hs_pad (torch.Tensor):
+                batch of padded hidden state sequences (B, Tmax, D)
+            hs_pad (torch.Tensor):
+                batch of sequence lenghts
+
+        Returns:
+            hyp (torch.Tensor):
+                batch of padded logits (B, Tmax, odim)
+
+        """
+        batchsize = len(hs_pad)
+        z_list, c_list = self.zero_state(hs_pad)
+        ey = to_device(self, torch.zeros((batchsize, self.embed_dim)))
+
+        hyp = []
+
+        y, (z_list, c_list) = self.rnn_forward(ey, (z_list, c_list))
+
+        hs_mask = make_non_pad_mask(hlens.tolist()).transpose(0, 1)
+        hs_pad = hs_pad.transpose(0, 1)
+        for hi, mi in zip(hs_pad, hs_mask):
+            ytu = F.log_softmax(self.joint(hi, y), dim=1)
+            pred = torch.argmax(ytu, dim=1)
+            hyp.append(ytu)
+
+            pred_mask = (pred != self.blank) & mi
+            non_blank = pred[pred_mask]
+            if len(non_blank) > 0:
+                eys = to_device(self, non_blank)
+                ey = self.dropout_embed(self.embed(eys))
+
+                z_list_non_blank = [z[pred_mask] for z in z_list]
+                c_list_non_blank = [c[pred_mask] for c in c_list]
+
+                y_non_blank, (z_list_non_blank, c_list_non_blank) = self.rnn_forward(ey, (z_list_non_blank, c_list_non_blank))
+
+                y[pred_mask] = y_non_blank
+                for i in range(len(z_list)):
+                    z_list[i][pred_mask] = z_list_non_blank[i]
+                    c_list[i][pred_mask] = c_list_non_blank[i]
+
+        hyp = torch.stack(hyp).transpose(0, 1)
+        return hyp
 
     def recognize(self, h, recog_args):
         """Greedy search implementation.
