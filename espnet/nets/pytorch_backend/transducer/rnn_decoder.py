@@ -1,8 +1,10 @@
 """RNN-Transducer implementation for training and decoding."""
 
 import torch
+import torch.nn.functional as F
 
 from espnet.nets.pytorch_backend.nets_utils import get_activation
+from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
 from espnet.nets.pytorch_backend.nets_utils import to_device
 
 from espnet.nets.transducer_decoder_interface import TransducerDecoderInterface
