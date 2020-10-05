@@ -166,7 +166,9 @@ class LoadInputsAndTargets(object):
                             if field in inp:
                                 y_feats_dict.setdefault(field, []).append(inp[field])
                             else:
-                                raise ValueError("Field {} not found in {}".format(field, uttid))
+                                raise ValueError(
+                                    "Field {} not found in {}".format(field, uttid)
+                                )
         if self.mode == "asr":
             return_batch, uttid_list = self._create_batch_asr(
                 x_feats_dict, y_feats_dict, uttid_list

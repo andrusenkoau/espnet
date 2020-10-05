@@ -27,6 +27,7 @@ if sys.version_info[0] == 2:
 else:
     from itertools import zip_longest as zip_longest
 
+
 def recog_v2(args):
     """Decode with custom models that implements ScorerInterface.
 
@@ -159,6 +160,7 @@ def recog_v2(args):
             ).encode("utf_8")
         )
 
+
 def calc_logits(args):
     """Infer logits into kaldi matrix.
 
@@ -172,7 +174,7 @@ def calc_logits(args):
     assert isinstance(model, ASRInterface)
     model.eval()
 
-    if hasattr(model, 'mtlalpha'):
+    if hasattr(model, "mtlalpha"):
         if model.mtlalpha == 0:
             raise NotImplementedError("Only pure attention mode is not supported")
         elif model.mtlalpha < 1:
@@ -224,7 +226,11 @@ def calc_logits(args):
             logits_pad = model.dec.calc_logits_batch(hs_pad, hlens)
         return logits_pad, hlens
 
-    calc_logits_func = calc_logits_transducer if "transducer" in train_args.model_module else calc_logits_ctc
+    calc_logits_func = (
+        calc_logits_transducer
+        if "transducer" in train_args.model_module
+        else calc_logits_ctc
+    )
 
     with torch.no_grad(), WriteHelper(args.result_mat, compression_method=2) as writer:
         # sort data if batchsize > 1

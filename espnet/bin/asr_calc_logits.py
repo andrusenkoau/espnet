@@ -121,7 +121,7 @@ def main(args):
         logging.warning("Skip DEBUG/INFO messages")
 
     # prevent memory leak when using cpu
-    os.environ['LRU_CACHE_CAPACITY'] = '1'
+    os.environ["LRU_CACHE_CAPACITY"] = "1"
     # check CUDA_VISIBLE_DEVICES
     if args.ngpu > 0:
         cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
@@ -138,11 +138,15 @@ def main(args):
 
         # trying to recover from the run.pl's CUDA_VISIBLE_DEVICES shifted allocation
         ngpu_command = "nvidia-smi --query-gpu=name --format=csv,noheader | wc -l"
-        sys_ngpu = subprocess.Popen([ngpu_command], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        sys_ngpu = subprocess.Popen(
+            [ngpu_command], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        ).communicate()
         sys_ngpu = int(sys_ngpu[0].decode("utf-8").split("\n")[0])
         cvd = int(cvd)
         if cvd == sys_ngpu:
-            logging.warning("CUDA_VISIBLE_DEVICES is set to a non-existing device. Overwritten as '0'.")
+            logging.warning(
+                "CUDA_VISIBLE_DEVICES is set to a non-existing device. Overwritten as '0'."
+            )
             os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         elif cvd > sys_ngpu:
             logging.error("CUDA_VISIBLE_DEVICES is set to a non-existing device.")

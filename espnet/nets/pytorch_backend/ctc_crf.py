@@ -1,10 +1,9 @@
-  
-'''
+"""
 Copyright 2018-2019 Tsinghua University, Author: Hongyu Xiang
 Apache 2.0.
 This script shows the implementation of CRF loss function.
 Taken from https://github.com/thu-spmi/CAT/
-'''
+"""
 
 import torch
 
@@ -17,7 +16,9 @@ def _assert_no_grad(tensor):
 
 class _CTC_CRF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, logits, labels, input_lengths, label_lengths, lamb=0.1, size_average=True):
+    def forward(
+        ctx, logits, labels, input_lengths, label_lengths, lamb=0.1, size_average=True
+    ):
         logits = logits.contiguous()
 
         batch_size = logits.size(0)
@@ -28,11 +29,22 @@ class _CTC_CRF(torch.autograd.Function):
 
         costs_ctc = torch.zeros(logits.size(0))
         act = torch.transpose(logits, 0, 1).contiguous()
-        grad_ctc= torch.zeros(act.size()).type_as(logits)
+        grad_ctc = torch.zeros(act.size()).type_as(logits)
 
         # print(label_lengths, input_lengths, logits.size(), labels.size())
-        ctc_crf_base.gpu_ctc(act, grad_ctc, labels, label_lengths, input_lengths, logits.size(0), costs_ctc, 0)
-        ctc_crf_base.gpu_den(logits, grad_den, input_lengths.cuda(), costs_alpha_den, costs_beta_den)
+        ctc_crf_base.gpu_ctc(
+            act,
+            grad_ctc,
+            labels,
+            label_lengths,
+            input_lengths,
+            logits.size(0),
+            costs_ctc,
+            0,
+        )
+        ctc_crf_base.gpu_den(
+            logits, grad_den, input_lengths.cuda(), costs_alpha_den, costs_beta_den
+        )
 
         grad_ctc = torch.transpose(grad_ctc, 0, 1)
         costs_ctc = costs_ctc.to(logits.get_device())
@@ -51,11 +63,19 @@ class _CTC_CRF(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return ctx.grads * grad_output.to(ctx.grads.device), None, None, None, None, None, None
+        return (
+            ctx.grads * grad_output.to(ctx.grads.device),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
 
 
 class CTC_CRF_LOSS(torch.nn.Module):
-    def __init__(self, lamb = 0.1, size_average=True):
+    def __init__(self, lamb=0.1, size_average=True):
         super(CTC_CRF_LOSS, self).__init__()
         self.ctc_crf = _CTC_CRF.apply
         self.lamb = lamb
@@ -66,4 +86,6 @@ class CTC_CRF_LOSS(torch.nn.Module):
         _assert_no_grad(labels)
         _assert_no_grad(input_lengths)
         _assert_no_grad(label_lengths)
-        return self.ctc_crf(logits, labels, input_lengths, label_lengths, self.lamb, self.size_average)
+        return self.ctc_crf(
+            logits, labels, input_lengths, label_lengths, self.lamb, self.size_average
+        )

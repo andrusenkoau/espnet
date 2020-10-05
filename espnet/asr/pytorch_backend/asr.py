@@ -38,6 +38,7 @@ from espnet.asr.pytorch_backend.asr_init import load_trained_model
 from espnet.asr.pytorch_backend.asr_init import load_trained_modules
 import espnet.lm.pytorch_backend.extlm as extlm_pytorch
 from espnet.nets.asr_interface import ASRInterface
+from espnet.nets.beam_search_transducer import BeamSearchTransducer
 from espnet.nets.pytorch_backend.e2e_asr import pad_list
 import espnet.nets.pytorch_backend.lm.default as lm_pytorch
 from espnet.nets.pytorch_backend.streaming.segment import SegmentStreamingE2E
@@ -447,6 +448,7 @@ def train(args):
         if args.num_encs != 1:
             raise NotImplementedError("Multi-encoder setup is not tested with ctc-crf")
         import ctc_crf_base
+
         TARGET_GPUS = list(range(args.ngpu))
         gpus = torch.IntTensor(TARGET_GPUS)
         ctc_crf_base.init_env(args.ctc_crf_den_lm, gpus)
@@ -623,7 +625,7 @@ def train(args):
     )
 
     # load target path weights when in ctc-crf mode
-    load_auxiliary_output=["weight"] if args.ctc_type == "ctc-crf" else None
+    load_auxiliary_output = ["weight"] if args.ctc_type == "ctc-crf" else None
     load_tr = LoadInputsAndTargets(
         mode="asr",
         load_output=True,
@@ -922,6 +924,7 @@ def train(args):
     # deinitialize CTC-CRF denominator fst
     if args.ctc_type == "ctc-crf":
         import ctc_crf_base
+
         ctc_crf_base.release_env(gpus)
 
 
@@ -1015,6 +1018,26 @@ def recog(args):
         preprocess_args={"train": False},
     )
 
+    # load transducer beam search
+    if hasattr(model, "rnnt_mode"):
+        if hasattr(model, "dec"):
+            trans_decoder = model.dec
+        else:
+            trans_decoder = model.decoder
+
+        beam_search_transducer = BeamSearchTransducer(
+            decoder=trans_decoder,
+            beam_size=args.beam_size,
+            lm=rnnlm,
+            lm_weight=args.lm_weight,
+            search_type=args.search_type,
+            max_sym_exp=args.max_sym_exp,
+            u_max=args.u_max,
+            nstep=args.nstep,
+            prefix_alpha=args.prefix_alpha,
+            score_norm=args.score_norm,
+        )
+
     if args.batchsize == 0:
         with torch.no_grad():
             for idx, name in enumerate(js.keys(), 1):
@@ -1074,6 +1097,8 @@ def recog(args):
                     nbest_hyps = model.recognize_maskctc(
                         feat, args, train_args.char_list
                     )
+                elif hasattr(model, "rnnt_mode"):
+                    nbest_hyps = model.recognize(feat, beam_search_transducer)
                 else:
                     nbest_hyps = model.recognize(
                         feat, args, train_args.char_list, rnnlm

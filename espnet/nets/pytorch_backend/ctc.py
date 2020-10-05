@@ -19,7 +19,9 @@ class CTC(torch.nn.Module):
     :param bool reduce: reduce the CTC loss into a scalar
     """
 
-    def __init__(self, odim, eprojs, dropout_rate, ctc_type="warpctc", reduce=True, lamb=0.1):
+    def __init__(
+        self, odim, eprojs, dropout_rate, ctc_type="warpctc", reduce=True, lamb=0.1
+    ):
         super().__init__()
         self.dropout_rate = dropout_rate
         self.lamb = lamb
@@ -27,10 +29,11 @@ class CTC(torch.nn.Module):
         self.ctc_lo = torch.nn.Linear(eprojs, odim)
         self.probs = None  # for visualization
 
-        # In case of Pytorch >= 1.4.0, CTC will be always builtin
+        # In case of Pytorch >= 1.7.0, CTC will be always builtin
         self.ctc_type = (
             ctc_type
-            if ctc_type != "warpctc" or LooseVersion(torch.__version__) < LooseVersion("1.4.0")
+            if ctc_type != "warpctc"
+            or LooseVersion(torch.__version__) < LooseVersion("1.7.0")
             else "builtin"
         )
         if ctc_type != self.ctc_type:
@@ -48,7 +51,9 @@ class CTC(torch.nn.Module):
             self.ctc_loss = CTC_CRF_LOSS(size_average=True, lamb=lamb)
         else:
             raise ValueError(
-                'ctc_type must be "builtin", "warpctc", or "ctc-crf": {}'.format(self.ctc_type)
+                'ctc_type must be "builtin", "warpctc", or "ctc-crf": {}'.format(
+                    self.ctc_type
+                )
             )
 
         self.ignore_id = -1
@@ -234,12 +239,19 @@ def ctc_for(args, odim, reduce=True):
     :param bool reduce : return the CTC loss in a scalar
     :return: the corresponding CTC module
     """
-    ctc_crf_lamb = getattr(args, "ctc_crf_lamb", 0.1)  # use getattr to keep compatibility
+    ctc_crf_lamb = getattr(
+        args, "ctc_crf_lamb", 0.1
+    )  # use getattr to keep compatibility
     num_encs = getattr(args, "num_encs", 1)  # use getattr to keep compatibility
     if num_encs == 1:
         # compatible with single encoder asr mode
         return CTC(
-            odim, args.eprojs, args.dropout_rate, ctc_type=args.ctc_type, reduce=reduce, lamb=ctc_crf_lamb
+            odim,
+            args.eprojs,
+            args.dropout_rate,
+            ctc_type=args.ctc_type,
+            reduce=reduce,
+            lamb=ctc_crf_lamb,
         )
     elif num_encs >= 1:
         ctcs_list = torch.nn.ModuleList()
