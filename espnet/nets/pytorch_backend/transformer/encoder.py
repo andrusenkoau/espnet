@@ -14,6 +14,7 @@ from espnet.nets.pytorch_backend.transducer.vgg2l import VGG2L
 from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
 from espnet.nets.pytorch_backend.transformer.dynamic_conv import DynamicConvolution
 from espnet.nets.pytorch_backend.transformer.dynamic_conv2d import DynamicConvolution2D
+from espnet.nets.pytorch_backend.transformer.embedding import EmbedAdapter
 from espnet.nets.pytorch_backend.transformer.embedding import PositionalEncoding
 from espnet.nets.pytorch_backend.transformer.encoder_layer import EncoderLayer
 from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
@@ -96,15 +97,17 @@ class Encoder(torch.nn.Module):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
         self._register_load_state_dict_pre_hook(_pre_hook)
+        # track the number of arguments of sequential module for JIT disamdiguation
+        num_sequential_args = 2
 
         if input_layer == "linear":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 torch.nn.Linear(idim, attention_dim),
                 torch.nn.LayerNorm(attention_dim),
                 torch.nn.Dropout(dropout_rate),
                 torch.nn.ReLU(),
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            )
+            ))
         elif input_layer == "conv2d":
             self.embed = Conv2dSubsampling(idim, attention_dim, dropout_rate)
         elif input_layer == "conv2d-scaled-pos-enc":
@@ -121,19 +124,19 @@ class Encoder(torch.nn.Module):
         elif input_layer == "vgg2l":
             self.embed = VGG2L(idim, attention_dim)
         elif input_layer == "embed":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 torch.nn.Embedding(idim, attention_dim, padding_idx=padding_idx),
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            )
+            ))
         elif isinstance(input_layer, torch.nn.Module):
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 input_layer,
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            )
+            ))
         elif input_layer is None:
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 pos_enc_class(attention_dim, positional_dropout_rate)
-            )
+            ))
         else:
             raise ValueError("unknown input_layer: " + input_layer)
         self.normalize_before = normalize_before
@@ -178,6 +181,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                num_sequential_args,
             )
         elif selfattention_layer_type == "lightconv2d":
             logging.info(
@@ -201,6 +205,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                num_sequential_args,
             )
         elif selfattention_layer_type == "dynamicconv":
             logging.info("encoder self-attention layer type = dynamic convolution")
@@ -221,6 +226,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                num_sequential_args,
             )
         elif selfattention_layer_type == "dynamicconv2d":
             logging.info(
@@ -243,6 +249,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                num_sequential_args,
             )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
@@ -291,13 +298,7 @@ class Encoder(torch.nn.Module):
             torch.Tensor: Mask tensor (#batch, time).
 
         """
-        if isinstance(
-            self.embed,
-            (Conv2dSubsampling, Conv2dSubsampling6, Conv2dSubsampling8, VGG2L),
-        ):
-            xs, masks = self.embed(xs, masks)
-        else:
-            xs = self.embed(xs)
+        xs, masks = self.embed(xs, masks)
         xs, masks = self.encoders(xs, masks)
         if self.normalize_before:
             xs = self.after_norm(xs)

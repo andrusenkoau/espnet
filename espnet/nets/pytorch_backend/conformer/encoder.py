@@ -19,6 +19,7 @@ from espnet.nets.pytorch_backend.transformer.attention import (
     RelPositionMultiHeadedAttention,  # noqa: H301
 )
 from espnet.nets.pytorch_backend.transformer.embedding import (
+    EmbedAdapter,  # noqa: H301
     PositionalEncoding,  # noqa: H301
     ScaledPositionalEncoding,  # noqa: H301
     RelPositionalEncoding,  # noqa: H301
@@ -90,6 +91,8 @@ class Encoder(torch.nn.Module):
         super(Encoder, self).__init__()
 
         activation = get_activation(activation_type)
+        # track the number of arguments of sequential module for JIT disamdiguation
+        num_sequential_args = 3
         if pos_enc_layer_type == "abs_pos":
             pos_enc_class = PositionalEncoding
         elif pos_enc_layer_type == "scaled_abs_pos":
@@ -101,12 +104,12 @@ class Encoder(torch.nn.Module):
             raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
 
         if input_layer == "linear":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 torch.nn.Linear(idim, attention_dim),
                 torch.nn.LayerNorm(attention_dim),
                 torch.nn.Dropout(dropout_rate),
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            )
+            ))
         elif input_layer == "conv2d":
             self.embed = Conv2dSubsampling(
                 idim,
@@ -117,19 +120,19 @@ class Encoder(torch.nn.Module):
         elif input_layer == "vgg2l":
             self.embed = VGG2L(idim, attention_dim)
         elif input_layer == "embed":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 torch.nn.Embedding(idim, attention_dim, padding_idx=padding_idx),
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            )
+            ))
         elif isinstance(input_layer, torch.nn.Module):
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 input_layer,
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            )
+            ))
         elif input_layer is None:
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(torch.nn.Sequential(
                 pos_enc_class(attention_dim, positional_dropout_rate)
-            )
+            ))
         else:
             raise ValueError("unknown input_layer: " + input_layer)
         self.normalize_before = normalize_before
@@ -198,6 +201,7 @@ class Encoder(torch.nn.Module):
                 normalize_before,
                 concat_after,
             ),
+            num_sequential_args,
         )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
@@ -214,14 +218,14 @@ class Encoder(torch.nn.Module):
             torch.Tensor: Mask tensor (#batch, time).
 
         """
-        if isinstance(self.embed, (Conv2dSubsampling, VGG2L)):
-            xs, masks = self.embed(xs, masks)
-        else:
-            xs = self.embed(xs)
+        xs, masks = self.embed(xs, masks)
 
-        xs, masks = self.encoders(xs, masks)
         if isinstance(xs, tuple):
-            xs = xs[0]
+            xs, pos_emb = xs[0], xs[1]
+        else:
+            xs, pos_emb = xs, None
+
+        xs, masks, pos_emb = self.encoders(xs, masks, pos_emb)
 
         if self.normalize_before:
             xs = self.after_norm(xs)

@@ -155,11 +155,12 @@ def filter_modules(model_state_dict, modules):
     return new_mods
 
 
-def load_trained_model(model_path):
+def load_trained_model(model_path, strict=True):
     """Load the trained model for recognition.
 
     Args:
         model_path (str): Path to model.***.best
+        strict (bool, optional): whether to raise an error if there are missing or unexpected keys in model state_dict
 
     """
     idim, odim, train_args = get_model_conf(
@@ -175,7 +176,7 @@ def load_trained_model(model_path):
     model_class = dynamic_import(model_module)
     model = model_class(idim, odim, train_args)
 
-    torch_load(model_path, model)
+    torch_load(model_path, model, strict=strict)
 
     return model, train_args
 

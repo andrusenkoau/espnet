@@ -7,8 +7,8 @@
 """Multi-Head Attention layer definition."""
 
 import math
+from typing import Optional
 
-import numpy
 import torch
 from torch import nn
 
@@ -34,8 +34,12 @@ class MultiHeadedAttention(nn.Module):
         self.linear_k = nn.Linear(n_feat, n_feat)
         self.linear_v = nn.Linear(n_feat, n_feat)
         self.linear_out = nn.Linear(n_feat, n_feat)
-        self.attn = None
+        # type error in old pytorch versions if scripting
+        self.attn = torch.empty(0)
         self.dropout = nn.Dropout(p=dropout_rate)
+        # finfo operator not bound into JIT
+        # https://github.com/pytorch/pytorch/issues/25661
+        self.min_values = {t:-float(torch.finfo(t).max) for t in [torch.float16, torch.float32, torch.float64]}
 
     def forward_qkv(self, query, key, value):
         """Transform query, key and value.
@@ -61,7 +65,7 @@ class MultiHeadedAttention(nn.Module):
 
         return q, k, v
 
-    def forward_attention(self, value, scores, mask):
+    def forward_attention(self, value, scores, mask: Optional[torch.Tensor]=None):
         """Compute attention context vector.
 
         Args:
@@ -77,9 +81,7 @@ class MultiHeadedAttention(nn.Module):
         n_batch = value.size(0)
         if mask is not None:
             mask = mask.unsqueeze(1).eq(0)  # (batch, 1, *, time2)
-            min_value = float(
-                numpy.finfo(torch.tensor(0, dtype=scores.dtype).numpy().dtype).min
-            )
+            min_value = self.min_values[scores.dtype]
             scores = scores.masked_fill(mask, min_value)
             self.attn = torch.softmax(scores, dim=-1).masked_fill(
                 mask, 0.0
@@ -95,8 +97,8 @@ class MultiHeadedAttention(nn.Module):
 
         return self.linear_out(x)  # (batch, time1, d_model)
 
-    def forward(self, query, key, value, mask):
-        """Compute scaled dot product attention.
+    def forward_impl(self, query, key, value, mask: Optional[torch.Tensor]=None):
+        """Implementation of MultiHeadedAttention forward.
 
         Args:
             query (torch.Tensor): Query tensor (#batch, time1, size).
@@ -112,6 +114,22 @@ class MultiHeadedAttention(nn.Module):
         q, k, v = self.forward_qkv(query, key, value)
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
         return self.forward_attention(v, scores, mask)
+
+    def forward(self, query, key, value, mask: Optional[torch.Tensor]=None):
+        """Compute scaled dot product attention.
+
+        Args:
+            query (torch.Tensor): Query tensor (#batch, time1, size).
+            key (torch.Tensor): Key tensor (#batch, time2, size).
+            value (torch.Tensor): Value tensor (#batch, time2, size).
+            mask (torch.Tensor): Mask tensor (#batch, 1, time2) or
+                (#batch, time1, time2).
+
+        Returns:
+            torch.Tensor: Output tensor (#batch, time1, d_model).
+
+        """
+        return self.forward_impl(query, key, value, mask)
 
 
 class RelPositionMultiHeadedAttention(MultiHeadedAttention):
@@ -138,7 +156,7 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
         torch.nn.init.xavier_uniform_(self.pos_bias_u)
         torch.nn.init.xavier_uniform_(self.pos_bias_v)
 
-    def rel_shift(self, x, zero_triu=False):
+    def rel_shift(self, x, zero_triu : bool=False):
         """Compute relative positinal encoding.
 
         Args:
@@ -149,10 +167,11 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
             torch.Tensor: Output tensor.
 
         """
-        zero_pad = torch.zeros((*x.size()[:3], 1), device=x.device, dtype=x.dtype)
+        x_size = x.size()
+        zero_pad = torch.zeros(x_size[:3] + (1,), device=x.device, dtype=x.dtype)
         x_padded = torch.cat([zero_pad, x], dim=-1)
 
-        x_padded = x_padded.view(*x.size()[:2], x.size(3) + 1, x.size(2))
+        x_padded = x_padded.view(x_size[:2] + (x_size[3] + 1, x_size[2]))
         x = x_padded[:, :, 1:].view_as(x)
 
         if zero_triu:
@@ -161,21 +180,27 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
 
         return x
 
-    def forward(self, query, key, value, pos_emb, mask):
+    def forward(self, query, key, value, mask: Optional[torch.Tensor]=None, pos_emb: Optional[torch.Tensor]=None):
         """Compute 'Scaled Dot Product Attention' with rel. positional encoding.
 
         Args:
             query (torch.Tensor): Query tensor (#batch, time1, size).
             key (torch.Tensor): Key tensor (#batch, time2, size).
             value (torch.Tensor): Value tensor (#batch, time2, size).
-            pos_emb (torch.Tensor): Positional embedding tensor (#batch, time2, size).
             mask (torch.Tensor): Mask tensor (#batch, 1, time2) or
                 (#batch, time1, time2).
+            pos_emb (torch.Tensor): Positional embedding tensor (#batch, time2, size).
 
         Returns:
             torch.Tensor: Output tensor (#batch, time1, d_model).
 
         """
+        if pos_emb is None:
+            # perform MultiHeadedAttention if no pos_emb provided
+            # can't call directly from super because of jit
+            return self.forward_impl(query, key, value, mask)
+        else:
+            pos_emb = pos_emb.to(query.dtype)
         q, k, v = self.forward_qkv(query, key, value)
         q = q.transpose(1, 2)  # (batch, time1, head, d_k)
 

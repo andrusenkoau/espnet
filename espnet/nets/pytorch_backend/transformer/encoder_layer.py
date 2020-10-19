@@ -6,8 +6,9 @@
 
 """Encoder self-attention layer definition."""
 
-import torch
+from typing import Optional
 
+import torch
 from torch import nn
 
 from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
@@ -52,10 +53,9 @@ class EncoderLayer(nn.Module):
         self.size = size
         self.normalize_before = normalize_before
         self.concat_after = concat_after
-        if self.concat_after:
-            self.concat_linear = nn.Linear(size + size, size)
+        self.concat_linear = nn.Linear(size + size, size)
 
-    def forward(self, x, mask, cache=None):
+    def forward(self, x, mask: Optional[torch.Tensor]=None, cache: Optional[torch.Tensor]=None):
         """Compute encoded features.
 
         Args:

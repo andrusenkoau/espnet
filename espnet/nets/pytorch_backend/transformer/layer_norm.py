@@ -7,6 +7,7 @@
 """Layer normalization module."""
 
 import torch
+import torch.nn.functional as F
 
 
 class LayerNorm(torch.nn.LayerNorm):
@@ -23,8 +24,9 @@ class LayerNorm(torch.nn.LayerNorm):
         super(LayerNorm, self).__init__(nout, eps=1e-12)
         self.dim = dim
 
-    def forward(self, x):
+    def __call__(self, x):
         """Apply layer normalization.
+        Used instead of forward for torch.script compatibility.
 
         Args:
             x (torch.Tensor): Input tensor.
@@ -34,5 +36,5 @@ class LayerNorm(torch.nn.LayerNorm):
 
         """
         if self.dim == -1:
-            return super(LayerNorm, self).forward(x)
-        return super(LayerNorm, self).forward(x.transpose(1, -1)).transpose(1, -1)
+            return self.forward(x)
+        return self.forward(x.transpose(1, -1)).transpose(1, -1)
