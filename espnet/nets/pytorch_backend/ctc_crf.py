@@ -1,6 +1,6 @@
 """
-Copyright 2018-2019 Tsinghua University, Author: Hongyu Xiang
-Apache 2.0.
+Copyright 2018-2019 Tsinghua University, Author: Hongyu Xiang. Apache 2.0.
+
 This script shows the implementation of CRF loss function.
 Taken from https://github.com/thu-spmi/CAT/
 """
@@ -31,7 +31,6 @@ class _CTC_CRF(torch.autograd.Function):
         act = torch.transpose(logits, 0, 1).contiguous()
         grad_ctc = torch.zeros(act.size()).type_as(logits)
 
-        # print(label_lengths, input_lengths, logits.size(), labels.size())
         ctc_crf_base.gpu_ctc(
             act,
             grad_ctc,
@@ -75,13 +74,30 @@ class _CTC_CRF(torch.autograd.Function):
 
 
 class CTC_CRF_LOSS(torch.nn.Module):
+    """CTC-CRF function module.
+
+    :param float lamb: ctc smoothing coefficient (0.0 ~ 1.0)
+    :param bool size_average: perform size average
+    """
+
     def __init__(self, lamb=0.1, size_average=True):
+        """Construct a CTC_CRF_LOSS object."""
         super(CTC_CRF_LOSS, self).__init__()
         self.ctc_crf = _CTC_CRF.apply
         self.lamb = lamb
         self.size_average = size_average
 
     def forward(self, logits, labels, input_lengths, label_lengths):
+        """CTC-CRF forward.
+
+        :param torch.Tensor logits: batch of padded log prob sequences (B, Tmax, odim)
+        :param torch.Tensor labels:
+            batch of padded character id sequence tensor (B, Lmax)
+        :param torch.Tensor input_lengths: batch of lengths of log prob sequences (B)
+        :param torch.Tensor label_lengths: batch of lengths character id sequences (B)
+        :return: ctc-crf loss value
+        :rtype: torch.Tensor
+        """
         assert len(labels.size()) == 1
         _assert_no_grad(labels)
         _assert_no_grad(input_lengths)

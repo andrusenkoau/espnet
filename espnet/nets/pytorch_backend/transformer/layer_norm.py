@@ -7,7 +7,6 @@
 """Layer normalization module."""
 
 import torch
-import torch.nn.functional as F
 
 
 class LayerNorm(torch.nn.LayerNorm):
@@ -26,6 +25,7 @@ class LayerNorm(torch.nn.LayerNorm):
 
     def __call__(self, x):
         """Apply layer normalization.
+
         Used instead of forward for torch.script compatibility.
 
         Args:

@@ -7,7 +7,7 @@
 
 """Encoder self-attention layer definition."""
 
-from typing import Optional, Tuple, Union
+from typing import Optional
 
 import torch
 
@@ -72,9 +72,17 @@ class EncoderLayer(nn.Module):
         self.size = size
         self.normalize_before = normalize_before
         self.concat_after = concat_after
-        self.concat_linear = nn.Linear(size + size, size)
+        self.concat_linear = (
+            nn.Linear(size + size, size) if self.concat_after else nn.Sequential()
+        )
 
-    def forward(self, x, mask: Optional[torch.Tensor]=None, pos_emb: Optional[torch.Tensor]=None, cache: Optional[torch.Tensor]=None):
+    def forward(
+        self,
+        x,
+        mask: Optional[torch.Tensor] = None,
+        pos_emb: Optional[torch.Tensor] = None,
+        cache: Optional[torch.Tensor] = None,
+    ):
         """Compute encoded features.
 
         Args:
@@ -88,7 +96,6 @@ class EncoderLayer(nn.Module):
             torch.Tensor: Mask tensor (#batch, time).
 
         """
-
         # whether to use macaron style
         if self.feed_forward_macaron is not None:
             residual = x

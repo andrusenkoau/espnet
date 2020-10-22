@@ -19,6 +19,7 @@ from espnet.nets.pytorch_backend.transformer.attention import (
     RelPositionMultiHeadedAttention,  # noqa: H301
 )
 from espnet.nets.pytorch_backend.transformer.embedding import (
+    EmbedAdapter,  # noqa: H301
     PositionalEncoding,  # noqa: H301
     ScaledPositionalEncoding,  # noqa: H301
     RelPositionalEncoding,  # noqa: H301
@@ -105,7 +106,7 @@ class ConformerEncoder(AbsEncoder):
             raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
 
         if input_layer == "linear":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Linear(input_size, output_size),
                 torch.nn.LayerNorm(output_size),
                 torch.nn.Dropout(dropout_rate),
@@ -133,17 +134,17 @@ class ConformerEncoder(AbsEncoder):
                 pos_enc_class(output_size, positional_dropout_rate),
             )
         elif input_layer == "embed":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Embedding(input_size, output_size, padding_idx=padding_idx),
                 pos_enc_class(output_size, positional_dropout_rate),
             )
         elif isinstance(input_layer, torch.nn.Module):
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 input_layer,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
         elif input_layer is None:
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 pos_enc_class(output_size, positional_dropout_rate)
             )
         else:
@@ -237,17 +238,15 @@ class ConformerEncoder(AbsEncoder):
         """
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
 
-        if (
-            isinstance(self.embed, Conv2dSubsampling)
-            or isinstance(self.embed, Conv2dSubsampling6)
-            or isinstance(self.embed, Conv2dSubsampling8)
-        ):
-            xs_pad, masks = self.embed(xs_pad, masks)
-        else:
-            xs_pad = self.embed(xs_pad)
-        xs_pad, masks = self.encoders(xs_pad, masks)
+        xs_pad, masks = self.embed(xs_pad, masks)
+
         if isinstance(xs_pad, tuple):
-            xs_pad = xs_pad[0]
+            xs_pad, pos_emb = xs_pad[0], xs_pad[1]
+        else:
+            xs_pad, pos_emb = xs_pad, None
+
+        xs_pad, masks = self.encoders(xs_pad, masks, pos_emb)[:2]
+
         if self.normalize_before:
             xs_pad = self.after_norm(xs_pad)
 

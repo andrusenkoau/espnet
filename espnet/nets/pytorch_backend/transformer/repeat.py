@@ -39,23 +39,15 @@ class MultiSequentialArg3(torch.nn.Sequential):
         return input1, input2, input3
 
 
-def repeat(N, fn, num_arg=0):
+def repeat(N, fn):
     """Repeat module N times.
 
     Args:
         N (int): Number of repeat time.
         fn (Callable): Function to generate module.
-        num_arg (int): Number arguments. Used for JIT disamdiguation.
 
     Returns:
         MultiSequential: Repeated model instance.
 
     """
-    if num_arg == 0:
-        return MultiSequential(*[fn(n) for n in range(N)])
-    elif num_arg == 2:
-        return MultiSequentialArg2(*[fn(n) for n in range(N)])
-    elif num_arg == 3:
-        return MultiSequentialArg3(*[fn(n) for n in range(N)])
-    else:
-        raise NotImplementedError
+    return MultiSequential(*[fn(n) for n in range(N)])

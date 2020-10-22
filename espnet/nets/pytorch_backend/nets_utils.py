@@ -3,7 +3,10 @@
 """Network related utility tools."""
 
 import logging
-from typing import Dict, Optional
+from typing import (
+    Dict,  # noqa: H301
+    Optional,  # noqa: H301
+)
 
 import numpy as np
 import torch
@@ -61,7 +64,7 @@ def pad_list(xs, pad_value):
     return pad
 
 
-def make_pad_mask(lengths, xs: Optional[torch.Tensor]=None, length_dim: int=-1):
+def make_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = -1):
     """Make mask tensor containing indices of padded part.
 
     Args:
@@ -150,8 +153,12 @@ def make_pad_mask(lengths, xs: Optional[torch.Tensor]=None, length_dim: int=-1):
     if length_dim == 0:
         raise ValueError("length_dim cannot be 0: {}".format(length_dim))
 
-    if not isinstance(lengths, torch.Tensor):
+    if isinstance(lengths, torch.Tensor):
+        lengths = lengths.clone().detach().cpu()
+    elif isinstance(lengths, list):
         lengths = torch.Tensor(lengths).to(dtype=torch.int64)
+    else:
+        raise NotImplementedError
     bs = lengths.size(0)
     if xs is None:
         maxlen = int(lengths.max())
@@ -160,7 +167,6 @@ def make_pad_mask(lengths, xs: Optional[torch.Tensor]=None, length_dim: int=-1):
 
     seq_range = torch.arange(0, maxlen, dtype=torch.int64)
     seq_range_expand = seq_range.unsqueeze(0).expand(bs, maxlen)
-    # seq_length_expand = seq_range_expand.new(lengths).unsqueeze(-1)
     mask = seq_range_expand >= lengths.unsqueeze(-1)
 
     if xs is not None:
@@ -168,8 +174,7 @@ def make_pad_mask(lengths, xs: Optional[torch.Tensor]=None, length_dim: int=-1):
 
         if length_dim < 0:
             length_dim = xs.dim() + length_dim
-        # ind = (:, None, ..., None, :, , None, ..., None)
-        ind = torch.zeros((xs.dim(),))
+        ind = [0] * xs.dim()
         for i in range(xs.dim()):
             if i == 0:
                 ind[i] = bs
@@ -181,7 +186,7 @@ def make_pad_mask(lengths, xs: Optional[torch.Tensor]=None, length_dim: int=-1):
     return mask
 
 
-def make_non_pad_mask(lengths, xs: Optional[torch.Tensor]=None, length_dim: int=-1):
+def make_non_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = -1):
     """Make mask tensor containing indices of non-padded part.
 
     Args:

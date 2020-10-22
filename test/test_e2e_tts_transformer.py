@@ -326,7 +326,7 @@ def test_attention_masking(model_dict):
     model = Transformer(idim, odim, Namespace(**model_args))
 
     # test encoder self-attention
-    xs = model.encoder.embed(batch["xs"])
+    xs = model.encoder.embed(batch["xs"])[0]
     xs[1, ilens[1] :] = float("nan")
     x_masks = model._source_mask(batch["ilens"])
     a = model.encoder.encoders[0].self_attn

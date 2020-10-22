@@ -10,7 +10,10 @@ from typeguard import check_argument_types
 
 from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
 from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
-from espnet.nets.pytorch_backend.transformer.embedding import PositionalEncoding
+from espnet.nets.pytorch_backend.transformer.embedding import (
+    EmbedAdapter,  # noqa: H301
+    PositionalEncoding,  # noqa: H301
+)
 from espnet.nets.pytorch_backend.transformer.encoder_layer import EncoderLayer
 from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
 from espnet.nets.pytorch_backend.transformer.multi_layer_conv import Conv1dLinear
@@ -73,7 +76,7 @@ class TransformerEncoder(AbsEncoder):
         self._output_size = output_size
 
         if input_layer == "linear":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Linear(input_size, output_size),
                 torch.nn.LayerNorm(output_size),
                 torch.nn.Dropout(dropout_rate),
@@ -87,12 +90,12 @@ class TransformerEncoder(AbsEncoder):
         elif input_layer == "conv2d8":
             self.embed = Conv2dSubsampling8(input_size, output_size, dropout_rate)
         elif input_layer == "embed":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Embedding(input_size, output_size, padding_idx=padding_idx),
                 pos_enc_class(output_size, positional_dropout_rate),
             )
         elif input_layer is None:
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 pos_enc_class(output_size, positional_dropout_rate)
             )
         else:
@@ -159,14 +162,7 @@ class TransformerEncoder(AbsEncoder):
         """
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
 
-        if (
-            isinstance(self.embed, Conv2dSubsampling)
-            or isinstance(self.embed, Conv2dSubsampling6)
-            or isinstance(self.embed, Conv2dSubsampling8)
-        ):
-            xs_pad, masks = self.embed(xs_pad, masks)
-        else:
-            xs_pad = self.embed(xs_pad)
+        xs_pad, masks = self.embed(xs_pad, masks)
         xs_pad, masks = self.encoders(xs_pad, masks)
         if self.normalize_before:
             xs_pad = self.after_norm(xs_pad)

@@ -32,6 +32,7 @@ from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
 )
 from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
+from espnet.utils.dynamic_import import dynamic_import
 
 
 class Encoder(torch.nn.Module):
@@ -91,8 +92,6 @@ class Encoder(torch.nn.Module):
         super(Encoder, self).__init__()
 
         activation = get_activation(activation_type)
-        # track the number of arguments of sequential module for JIT disamdiguation
-        num_sequential_args = 3
         if pos_enc_layer_type == "abs_pos":
             pos_enc_class = PositionalEncoding
         elif pos_enc_layer_type == "scaled_abs_pos":
@@ -104,12 +103,12 @@ class Encoder(torch.nn.Module):
             raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
 
         if input_layer == "linear":
-            self.embed = EmbedAdapter(torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Linear(idim, attention_dim),
                 torch.nn.LayerNorm(attention_dim),
                 torch.nn.Dropout(dropout_rate),
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            ))
+            )
         elif input_layer == "conv2d":
             self.embed = Conv2dSubsampling(
                 idim,
@@ -120,22 +119,25 @@ class Encoder(torch.nn.Module):
         elif input_layer == "vgg2l":
             self.embed = VGG2L(idim, attention_dim)
         elif input_layer == "embed":
-            self.embed = EmbedAdapter(torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Embedding(idim, attention_dim, padding_idx=padding_idx),
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            ))
+            )
         elif isinstance(input_layer, torch.nn.Module):
-            self.embed = EmbedAdapter(torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 input_layer,
                 pos_enc_class(attention_dim, positional_dropout_rate),
-            ))
+            )
         elif input_layer is None:
-            self.embed = EmbedAdapter(torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 pos_enc_class(attention_dim, positional_dropout_rate)
-            ))
+            )
         else:
             raise ValueError("unknown input_layer: " + input_layer)
         self.normalize_before = normalize_before
+
+        # track the number of arguments of sequential modules for JIT disamdiguation
+        self.num_sequential_args_enc = 3
 
         # self-attention module definition
         if selfattention_layer_type == "selfattn":
@@ -201,7 +203,6 @@ class Encoder(torch.nn.Module):
                 normalize_before,
                 concat_after,
             ),
-            num_sequential_args,
         )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
@@ -225,8 +226,19 @@ class Encoder(torch.nn.Module):
         else:
             xs, pos_emb = xs, None
 
-        xs, masks, pos_emb = self.encoders(xs, masks, pos_emb)
+        xs, masks = self.encoders(xs, masks, pos_emb)[:2]
 
         if self.normalize_before:
             xs = self.after_norm(xs)
         return xs, masks
+
+    def scripting_prep(self):
+        """Torch.jit stripting preparations."""
+        # first, let's disambiguate MultiSequential encoders
+        file_path = "espnet.nets.pytorch_backend.transformer.repeat"
+        encoders_class_name = "{}:MultiSequentialArg{}".format(
+            file_path,
+            self.num_sequential_args_enc,
+        )
+        encoders_class = dynamic_import(encoders_class_name)
+        self.encoders = encoders_class(*[layer for layer in self.encoders])

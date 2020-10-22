@@ -145,7 +145,8 @@ def main(args):
         cvd = int(cvd)
         if cvd == sys_ngpu:
             logging.warning(
-                "CUDA_VISIBLE_DEVICES is set to a non-existing device. Overwritten as '0'."
+                """CUDA_VISIBLE_DEVICES is set to a non-existing device.
+ Overwritten as '0'."""
             )
             os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         elif cvd > sys_ngpu:

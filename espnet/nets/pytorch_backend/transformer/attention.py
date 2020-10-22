@@ -39,7 +39,10 @@ class MultiHeadedAttention(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
         # finfo operator not bound into JIT
         # https://github.com/pytorch/pytorch/issues/25661
-        self.min_values = {t:-float(torch.finfo(t).max) for t in [torch.float16, torch.float32, torch.float64]}
+        self.min_values = {
+            t: -float(torch.finfo(t).max)
+            for t in [torch.float16, torch.float32, torch.float64]
+        }
 
     def forward_qkv(self, query, key, value):
         """Transform query, key and value.
@@ -65,7 +68,7 @@ class MultiHeadedAttention(nn.Module):
 
         return q, k, v
 
-    def forward_attention(self, value, scores, mask: Optional[torch.Tensor]=None):
+    def forward_attention(self, value, scores, mask: Optional[torch.Tensor] = None):
         """Compute attention context vector.
 
         Args:
@@ -97,8 +100,8 @@ class MultiHeadedAttention(nn.Module):
 
         return self.linear_out(x)  # (batch, time1, d_model)
 
-    def forward_impl(self, query, key, value, mask: Optional[torch.Tensor]=None):
-        """Implementation of MultiHeadedAttention forward.
+    def forward_impl(self, query, key, value, mask: Optional[torch.Tensor] = None):
+        """Compute actual MultiHeadedAttention forward.
 
         Args:
             query (torch.Tensor): Query tensor (#batch, time1, size).
@@ -115,7 +118,7 @@ class MultiHeadedAttention(nn.Module):
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
         return self.forward_attention(v, scores, mask)
 
-    def forward(self, query, key, value, mask: Optional[torch.Tensor]=None):
+    def forward(self, query, key, value, mask: Optional[torch.Tensor] = None):
         """Compute scaled dot product attention.
 
         Args:
@@ -156,7 +159,7 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
         torch.nn.init.xavier_uniform_(self.pos_bias_u)
         torch.nn.init.xavier_uniform_(self.pos_bias_v)
 
-    def rel_shift(self, x, zero_triu : bool=False):
+    def rel_shift(self, x, zero_triu: bool = False):
         """Compute relative positinal encoding.
 
         Args:
@@ -180,7 +183,14 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
 
         return x
 
-    def forward(self, query, key, value, mask: Optional[torch.Tensor]=None, pos_emb: Optional[torch.Tensor]=None):
+    def forward(
+        self,
+        query,
+        key,
+        value,
+        mask: Optional[torch.Tensor] = None,
+        pos_emb: Optional[torch.Tensor] = None,
+    ):
         """Compute 'Scaled Dot Product Attention' with rel. positional encoding.
 
         Args:

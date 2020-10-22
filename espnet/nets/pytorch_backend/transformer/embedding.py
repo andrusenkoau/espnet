@@ -33,16 +33,11 @@ def _pre_hook(
         state_dict.pop(k)
 
 
-class EmbedAdapter(torch.nn.Module):
+class EmbedAdapter(torch.nn.Sequential):
     """Torch.script adapter allowing the mask to bypass the sequential block."""
 
-    def __init__(self, emb_model):
-        """Construct an EmbedAdapter object."""
-        super().__init__()
-        self.emb_model = emb_model
-
-    def forward(self, x, mask):
-        """forward embedding.
+    def __call__(self, x, mask: Optional[torch.Tensor] = None):
+        """Pass mask around Sequential forward.
 
         Args:
             x (torch.Tensor): Input tensor (batch, time, `*`).
@@ -52,10 +47,9 @@ class EmbedAdapter(torch.nn.Module):
             torch.Tensor: Encoded tensor (batch, time, `*`).
 
         """
-        x = self.emb_model(x)
-        if mask is None:
-            return x, None
+        x = self.forward(x)
         return x, mask
+
 
 class PositionalEncoding(torch.nn.Module):
     """Positional encoding.

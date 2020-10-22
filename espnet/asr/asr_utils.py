@@ -725,7 +725,8 @@ def torch_load(path, model, strict=True):
     Args:
         path (str): Model path or snapshot file path to be loaded.
         model (torch.nn.Module): Torch model.
-        strict (bool, optional): whether to raise an error if there are missing or unexpected keys in model state_dict
+        strict (bool, optional): Whether to raise an error if there are missing or
+            unexpected keys in model state_dict.
 
     """
     if "snapshot" in os.path.basename(path):
