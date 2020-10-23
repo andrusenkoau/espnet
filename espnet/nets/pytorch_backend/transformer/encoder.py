@@ -143,7 +143,7 @@ class Encoder(torch.nn.Module):
         self.normalize_before = normalize_before
 
         # track the number of arguments of sequential modules for JIT disamdiguation
-        self.num_sequential_args_enc = 2
+        self.num_sequential_args = 2
 
         positionwise_layer, positionwise_layer_args = self.get_positionwise_layer(
             positionwise_layer_type,
@@ -332,11 +332,11 @@ class Encoder(torch.nn.Module):
 
     def scripting_prep(self):
         """Torch.jit stripting preparations."""
-        # first, let's disambiguate MultiSequential encoders
+        # disambiguate MultiSequential encoders
         file_path = "espnet.nets.pytorch_backend.transformer.repeat"
         encoders_class_name = "{}:MultiSequentialArg{}".format(
             file_path,
-            self.num_sequential_args_enc,
+            self.num_sequential_args,
         )
         encoders_class = dynamic_import(encoders_class_name)
         self.encoders = encoders_class(*[layer for layer in self.encoders])
