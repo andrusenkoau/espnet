@@ -6,10 +6,7 @@ import torch
 
 import espnet.nets.chainer_backend.e2e_asr_transformer as ch
 import espnet.nets.pytorch_backend.e2e_asr_transformer as th
-from espnet.nets.pytorch_backend.nets_utils import (
-    make_non_pad_mask,  # noqa: H301
-    rename_state_dict,  # noqa: H301
-)
+from espnet.nets.pytorch_backend.nets_utils import rename_state_dict
 from espnet.nets.pytorch_backend.transformer.add_sos_eos import add_sos_eos
 from espnet.nets.pytorch_backend.transformer.mask import subsequent_mask
 from espnet.nets.pytorch_backend.transformer.mask import target_mask
@@ -121,57 +118,6 @@ def test_transformer_mask():
     a = model.decoder.decoders[0].self_attn
     a(y, y, y, y_mask)
     assert not numpy.isnan(a.attn[0, :, :3, :3].detach().numpy()).any()
-
-
-def test_traceable_and_scriptable():
-    args = make_arg()
-    model, x_pad, ilens, y, data = prepare("pytorch", args)
-    ys_in_pad, ys_out_pad = add_sos_eos(y, model.sos, model.eos, model.ignore_id)
-    ys_mask = target_mask(ys_in_pad, model.ignore_id)
-    src_mask = make_non_pad_mask(ilens).unsqueeze(-2)
-    model.eval()
-
-    with torch.no_grad():
-        hs_pad, hs_mask = model.encoder(x_pad, src_mask)
-        pred_pad, pred_mask = model.decoder(ys_in_pad, ys_mask, hs_pad, hs_mask)
-
-        # test encoder traceable
-        traced_encoder = torch.jit.trace(model.encoder, (x_pad, src_mask))
-
-        # test results equal
-        hs_pad_tr, hs_mask_tr = traced_encoder(x_pad, src_mask)
-        assert torch.all(hs_pad_tr.eq(hs_pad))
-        assert torch.all(hs_mask_tr.eq(hs_mask))
-
-        # test encoder scriptable
-        model.encoder.scripting_prep()
-        scripted_encoder = torch.jit.script(model.encoder)
-
-        # test results equal
-        hs_pad_scr, hs_mask_scr = scripted_encoder(x_pad, src_mask)
-        assert torch.all(hs_pad_scr.eq(hs_pad))
-        assert torch.all(hs_mask_scr.eq(hs_mask))
-
-        # test decoder traceable
-        traced_decoder = torch.jit.trace(
-            model.decoder, (ys_in_pad, ys_mask, hs_pad, hs_mask)
-        )
-
-        # test results equal
-        pred_pad_tr, pred_mask_tr = traced_decoder(ys_in_pad, ys_mask, hs_pad, hs_mask)
-        assert torch.all(pred_pad_tr.eq(pred_pad))
-        assert torch.all(pred_mask_tr.eq(pred_mask))
-
-        # test decoder scriptable
-        model.decoder.scripting_prep()
-        scripted_decoder = torch.jit.script(model.decoder)
-
-        # test results equal
-        pred_pad_scr, pred_mask_scr = scripted_decoder(
-            ys_in_pad, ys_mask, hs_pad, hs_mask
-        )
-        assert torch.all(pred_pad_scr.eq(pred_pad))
-        assert torch.all(pred_mask_scr.eq(pred_mask))
 
 
 ldconv_lconv_args = dict(

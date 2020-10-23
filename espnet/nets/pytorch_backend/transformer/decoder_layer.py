@@ -6,8 +6,6 @@
 
 """Decoder self-attention layer definition."""
 
-from typing import Optional
-
 import torch
 from torch import nn
 
@@ -61,13 +59,8 @@ class DecoderLayer(nn.Module):
         if self.concat_after:
             self.concat_linear1 = nn.Linear(size + size, size)
             self.concat_linear2 = nn.Linear(size + size, size)
-        else:
-            self.concat_linear1 = nn.Sequential()
-            self.concat_linear2 = nn.Sequential()
 
-    def forward(
-        self, tgt, tgt_mask, memory, memory_mask, cache: Optional[torch.Tensor] = None
-    ):
+    def forward(self, tgt, tgt_mask, memory, memory_mask, cache=None):
         """Compute decoded features.
 
         Args:

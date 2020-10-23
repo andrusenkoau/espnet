@@ -39,16 +39,6 @@ class MultiSequentialArg3(torch.nn.Sequential):
         return input1, input2, input3
 
 
-class MultiSequentialArg4(torch.nn.Sequential):
-    """2-input 2-output torch.nn.Sequential."""
-
-    def forward(self, input1, input2, input3, input4):
-        """Repeat."""
-        for m in self:
-            input1, input2, input3, input4 = m(input1, input2, input3, input4)
-        return input1, input2, input3, input4
-
-
 def repeat(N, fn):
     """Repeat module N times.
 

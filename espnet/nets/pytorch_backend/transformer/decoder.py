@@ -29,7 +29,6 @@ from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
 )
 from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.scorer_interface import BatchScorerInterface
-from espnet.utils.dynamic_import import dynamic_import
 
 
 def _pre_hook(
@@ -122,10 +121,6 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
         else:
             raise NotImplementedError("only `embed` or torch.nn.Module is supported.")
         self.normalize_before = normalize_before
-
-        # track the number of arguments of sequential modules for JIT disamdiguation
-        self.num_sequential_args = 4
-
         if selfattention_layer_type == "selfattn":
             logging.info("decoder self-attention layer type = self-attention")
             self.decoders = repeat(
@@ -373,14 +368,3 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
         # transpose state of [layer, batch] into [batch, layer]
         state_list = [[states[i][b] for i in range(n_layers)] for b in range(n_batch)]
         return logp, state_list
-
-    def scripting_prep(self):
-        """Torch.jit stripting preparations."""
-        # disambiguate MultiSequential decoders
-        file_path = "espnet.nets.pytorch_backend.transformer.repeat"
-        decoders_class_name = "{}:MultiSequentialArg{}".format(
-            file_path,
-            self.num_sequential_args,
-        )
-        encoders_class = dynamic_import(decoders_class_name)
-        self.decoders = encoders_class(*[layer for layer in self.decoders])
