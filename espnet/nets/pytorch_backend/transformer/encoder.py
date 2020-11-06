@@ -9,7 +9,10 @@
 import logging
 import torch
 
-from espnet.nets.pytorch_backend.nets_utils import rename_state_dict
+from espnet.nets.pytorch_backend.nets_utils import (
+    chunk_attention_mask,  # noqa: H301
+    rename_state_dict,  # noqa: H301
+)
 from espnet.nets.pytorch_backend.transducer.vgg2l import VGG2L
 from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
 from espnet.nets.pytorch_backend.transformer.dynamic_conv import DynamicConvolution
@@ -96,6 +99,10 @@ class Encoder(torch.nn.Module):
         positionwise_layer_type="linear",
         positionwise_conv_kernel_size=1,
         padding_idx=-1,
+        use_chunk=False,
+        chunk_window=1,
+        chunk_left_context=0,
+        chunk_right_context=0,
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -255,6 +262,12 @@ class Encoder(torch.nn.Module):
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
 
+        # chunk attention attributes:
+        self.use_chunk = use_chunk
+        self.chunk_window = chunk_window
+        self.chunk_left_context = chunk_left_context
+        self.chunk_right_context = chunk_right_context
+
     def get_positionwise_layer(
         self,
         positionwise_layer_type="linear",
@@ -300,9 +313,29 @@ class Encoder(torch.nn.Module):
 
         """
         xs, masks = self.embed(xs, masks)
-        xs, masks = self.encoders(xs, masks)
+
+        # chunk-attention part
+        if self.use_chunk:
+            batch_size = xs.shape[0]
+            seq_len = xs.shape[1]
+            encoder_mask = chunk_attention_mask(
+                seq_len,
+                self.chunk_window,
+                chunk_left_context=self.chunk_left_context,
+                chunk_right_context=self.chunk_right_context,
+            )
+            encoder_masks = encoder_mask.expand(batch_size, -1, -1).to(xs.device)
+
+            encoder_masks = encoder_masks & masks & masks.transpose(1, 2)
+
+        else:
+            encoder_masks = masks
+
+        xs, encoder_masks = self.encoders(xs, encoder_masks)
         if self.normalize_before:
             xs = self.after_norm(xs)
+
+        # we do not want to pass chunked encoder_masks further
         return xs, masks
 
     def forward_one_step(self, xs, masks, cache=None):

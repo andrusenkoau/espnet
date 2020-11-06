@@ -66,5 +66,9 @@ class E2E(E2ETransformer):
             macaron_style=args.macaron_style,
             use_cnn_module=args.use_cnn_module,
             cnn_module_kernel=args.cnn_module_kernel,
+            use_chunk=args.use_chunk,
+            chunk_window=args.chunk_window,
+            chunk_left_context=args.chunk_left_context,
+            chunk_right_context=args.chunk_right_context,
         )
         self.reset_parameters(args)

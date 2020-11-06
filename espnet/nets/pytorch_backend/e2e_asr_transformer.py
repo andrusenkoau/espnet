@@ -107,6 +107,10 @@ class E2E(ASRInterface, torch.nn.Module):
             dropout_rate=args.dropout_rate,
             positional_dropout_rate=args.dropout_rate,
             attention_dropout_rate=args.transformer_attn_dropout_rate,
+            use_chunk=args.use_chunk,
+            chunk_window=args.chunk_window,
+            chunk_left_context=args.chunk_left_context,
+            chunk_right_context=args.chunk_right_context,
         )
         if args.mtlalpha < 1:
             self.decoder = Decoder(

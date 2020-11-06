@@ -12,7 +12,10 @@ import torch
 
 from espnet.nets.pytorch_backend.conformer.convolution import ConvolutionModule
 from espnet.nets.pytorch_backend.conformer.encoder_layer import EncoderLayer
-from espnet.nets.pytorch_backend.nets_utils import get_activation
+from espnet.nets.pytorch_backend.nets_utils import (
+    chunk_attention_mask,  # noqa: H301
+    get_activation,  # noqa: H301
+)
 from espnet.nets.pytorch_backend.transducer.vgg2l import VGG2L
 from espnet.nets.pytorch_backend.transformer.attention import (
     MultiHeadedAttention,  # noqa: H301
@@ -87,6 +90,10 @@ class Encoder(torch.nn.Module):
         use_cnn_module=False,
         cnn_module_kernel=31,
         padding_idx=-1,
+        use_chunk=False,
+        chunk_window=1,
+        chunk_left_context=0,
+        chunk_right_context=0,
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -207,6 +214,12 @@ class Encoder(torch.nn.Module):
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
 
+        # chunk attention attributes:
+        self.use_chunk = use_chunk
+        self.chunk_window = chunk_window
+        self.chunk_left_context = chunk_left_context
+        self.chunk_right_context = chunk_right_context
+
     def forward(self, xs, masks):
         """Encode input sequence.
 
@@ -226,10 +239,28 @@ class Encoder(torch.nn.Module):
         else:
             xs, pos_emb = xs, None
 
-        xs, masks = self.encoders(xs, masks, pos_emb)[:2]
+        # chunk-attention part
+        if self.use_chunk:
+            batch_size = xs.shape[0]
+            seq_len = xs.shape[1]
+            encoder_mask = chunk_attention_mask(
+                seq_len,
+                self.chunk_window,
+                chunk_left_context=self.chunk_left_context,
+                chunk_right_context=self.chunk_right_context,
+            )
+            encoder_masks = encoder_mask.expand(batch_size, -1, -1).to(xs.device)
 
+            encoder_masks = encoder_masks & masks & masks.transpose(1, 2)
+
+        else:
+            encoder_masks = masks
+
+        xs, encoder_masks = self.encoders(xs, encoder_masks, pos_emb)[:2]
         if self.normalize_before:
             xs = self.after_norm(xs)
+
+        # we do not want to pass chunked encoder_masks further
         return xs, masks
 
     def scripting_prep(self):

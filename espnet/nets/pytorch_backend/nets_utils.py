@@ -12,6 +12,53 @@ import numpy as np
 import torch
 
 
+def chunk_attention_mask(
+    seq_len: int,
+    chunk_window: int,
+    chunk_left_context: int = 0,
+    chunk_right_context: int = 0,
+):
+    """Make mask tensor containing indices of padded part.
+
+    Args:
+        seq_len (int): Length of sequence.
+        chunk_window (int): Length of chunk window.
+        chunk_left_context (int, optional): Length of left context for chunk
+        chunk_right_context (int, optional): Length of left context for chunk
+
+    Returns:
+        Tensor: Mask tensor containing indices of padded part.
+                dtype=torch.uint8 in PyTorch 1.2-
+                dtype=torch.bool in PyTorch 1.2+ (including 1.2)
+
+    """
+    seq_range = torch.arange(0, seq_len, dtype=torch.int64)
+    seq_range_expand = seq_range.unsqueeze(0).unsqueeze(0).expand(1, seq_len, seq_len)
+    chunk_range = torch.tensor(
+        (
+            (seq_range // chunk_window) * chunk_window
+            + (chunk_window - 1)
+            + chunk_right_context
+        )
+    )
+    chunk_range_expand_right = (
+        chunk_range.unsqueeze(0).unsqueeze(-1).expand(1, seq_len, 1)
+    )
+    mask_right = seq_range_expand <= chunk_range_expand_right
+
+    chunk_range_left = (
+        chunk_range - chunk_window - chunk_right_context - chunk_left_context
+    )
+    chunk_range_expand_left = (
+        chunk_range_left.unsqueeze(0).unsqueeze(-1).expand(1, seq_len, 1)
+    )
+    mask_left = seq_range_expand > chunk_range_expand_left
+
+    mask = mask_right & mask_left
+
+    return mask
+
+
 def to_device(m, x):
     """Send tensor into the device of the module.
 
