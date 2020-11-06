@@ -247,6 +247,88 @@ class CustomUpdater(StandardUpdater):
             self.iteration += 1
 
 
+class ChunkAttentionCustomConverter(object):
+    """Custom batch converter for Pytorch.
+
+    Args:
+        subsampling_factor (int): The subsampling factor.
+        dtype (torch.dtype): Data type to convert.
+
+    """
+
+    def __init__(self, subsampling_factor=1, dtype=torch.float32):
+        """Construct a CustomConverter object."""
+        self.subsampling_factor = subsampling_factor
+        self.ignore_id = -1
+        self.dtype = dtype
+
+    def __call__(self, batch, device=torch.device("cpu")):
+        """Transform a batch and send it to a device.
+
+        Args:
+            batch (list): The batch to transform.
+            device (torch.device): The device to send to.
+
+        Returns:
+            tuple(torch.Tensor, torch.Tensor, torch.Tensor)
+
+        """
+        # batch should be located in list
+        assert len(batch) == 1
+        # in case of auxiliary output fields in ys
+        xs, *ys = batch[0]
+
+        # perform subsampling
+        if self.subsampling_factor > 1:
+            xs = [x[:: self.subsampling_factor, :] for x in xs]
+
+        # get batch of lengths of input sequences
+        ilens = np.array([x.shape[0] for x in xs])
+
+        # perform padding and convert to tensor
+        # currently only support real number
+        if xs[0].dtype.kind == "c":
+            xs_pad_real = pad_list(
+                [torch.from_numpy(x.real).float() for x in xs], 0
+            ).to(device, dtype=self.dtype)
+            xs_pad_imag = pad_list(
+                [torch.from_numpy(x.imag).float() for x in xs], 0
+            ).to(device, dtype=self.dtype)
+            # Note(kamo):
+            # {'real': ..., 'imag': ...} will be changed to ComplexTensor in E2E.
+            # Don't create ComplexTensor and give it E2E here
+            # because torch.nn.DataParellel can't handle it.
+            xs_pad = {"real": xs_pad_real, "imag": xs_pad_imag}
+        else:
+            xs_pad = pad_list([torch.from_numpy(x).float() for x in xs], 0).to(
+                device, dtype=self.dtype
+            )
+
+        ilens = torch.from_numpy(ilens).to(device)
+        # NOTE: this is for multi-output (e.g., speech translation)
+        ys_pad = pad_list(
+            [
+                torch.from_numpy(
+                    np.array(y[0][:]) if isinstance(y, tuple) else y
+                ).long()
+                for y in ys[0]
+            ],
+            self.ignore_id,
+        ).to(device)
+
+        # make encoder attention mask:
+        if self.args.transformer_input_layer == 'custom':
+            seq_len = ((ilens[0].item()+1)//2+1)//2
+        else:
+            seq_len = ((ilens[0].item()-1)//2-1)//2 
+        encoder_mask = chunk_encoder_mask(seq_len, )
+
+        if len(ys) == 1:
+            return xs_pad, ilens, ys_pad
+        else:
+            return xs_pad, ilens, ys_pad, ys[1:]
+
+
 class CustomConverter(object):
     """Custom batch converter for Pytorch.
 

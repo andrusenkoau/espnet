@@ -526,6 +526,15 @@ def get_parser(parser=None, required=True):
     )
     parser.add_argument("--fbank-fmin", type=float, default=0.0, help="")
     parser.add_argument("--fbank-fmax", type=float, default=None, help="")
+    
+
+    # Chunk attention
+    parser.add_argument("--use-chunk", default=False, type=strtobool, help="use of chunk attention")
+    parser.add_argument("--chunk-window", default=None, type=int, help="chunk window size in frames")
+    parser.add_argument("--chunk-left-context", default=None, type=int, help="chunk left context size in frames")
+    parser.add_argument("--chunk-right-context", default=None, type=int, help="chunk right context size in frames")
+    
+    
     return parser
 
 

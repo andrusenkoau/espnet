@@ -9,6 +9,24 @@ import numpy as np
 import torch
 
 
+def chunk_attention_mask(seq_len, chunk_window, chunk_left_context=0, chunk_right_context=0, bs=1):
+    
+
+    seq_range = torch.arange(0, seq_len, dtype=torch.int64)
+    seq_range_expand = seq_range.unsqueeze(0).unsqueeze(0).expand(bs, seq_len, seq_len)
+    chunk_range = (seq_range // chunk_window) * chunk_window + (chunk_window-1) + chunk_right_context
+    chunk_range_expand_right = chunk_range.unsqueeze(0).unsqueeze(-1).expand(bs, seq_len, 1)
+    mask_right = seq_range_expand <= chunk_range_expand_right
+
+    chunk_range_left = chunk_range - chunk_window - chunk_right_context - chunk_left_context
+    chunk_range_expand_left = chunk_range_left.unsqueeze(0).unsqueeze(-1).expand(bs, seq_len, 1)
+    mask_left = seq_range_expand > chunk_range_expand_left
+
+    mask = mask_right & mask_left
+    
+    return mask
+
+
 def to_device(m, x):
     """Send tensor into the device of the module.
 
