@@ -103,6 +103,7 @@ class Encoder(torch.nn.Module):
         chunk_window=1,
         chunk_left_context=0,
         chunk_right_context=0,
+        use_checkpointing=False,
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -173,6 +174,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "lightconv":
             logging.info("encoder self-attention layer type = lightweight convolution")
@@ -193,6 +195,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "lightconv2d":
             logging.info(
@@ -216,6 +219,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "dynamicconv":
             logging.info("encoder self-attention layer type = dynamic convolution")
@@ -236,6 +240,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "dynamicconv2d":
             logging.info(
@@ -258,6 +263,7 @@ class Encoder(torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)

@@ -111,6 +111,7 @@ class E2E(ASRInterface, torch.nn.Module):
             chunk_window=args.chunk_window,
             chunk_left_context=args.chunk_left_context,
             chunk_right_context=args.chunk_right_context,
+            use_checkpointing=args.grad_checkpointing,
         )
         if args.mtlalpha < 1:
             self.decoder = Decoder(
@@ -127,6 +128,7 @@ class E2E(ASRInterface, torch.nn.Module):
                 positional_dropout_rate=args.dropout_rate,
                 self_attention_dropout_rate=args.transformer_attn_dropout_rate,
                 src_attention_dropout_rate=args.transformer_attn_dropout_rate,
+                use_checkpointing=args.grad_checkpointing,
             )
             self.criterion = LabelSmoothingLoss(
                 odim,

@@ -98,6 +98,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
         pos_enc_class=PositionalEncoding,
         normalize_before=True,
         concat_after=False,
+        use_checkpointing=False,
     ):
         """Construct an Decoder object."""
         torch.nn.Module.__init__(self)
@@ -143,6 +144,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "lightconv":
             logging.info("decoder self-attention layer type = lightweight convolution")
@@ -167,6 +169,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "lightconv2d":
             logging.info(
@@ -194,6 +197,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "dynamicconv":
             logging.info("decoder self-attention layer type = dynamic convolution")
@@ -218,6 +222,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         elif selfattention_layer_type == "dynamicconv2d":
             logging.info(
@@ -244,6 +249,7 @@ class Decoder(BatchScorerInterface, torch.nn.Module):
                     normalize_before,
                     concat_after,
                 ),
+                use_checkpointing,
             )
         self.selfattention_layer_type = selfattention_layer_type
         if self.normalize_before:

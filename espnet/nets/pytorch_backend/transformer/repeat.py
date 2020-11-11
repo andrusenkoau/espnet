@@ -7,6 +7,7 @@
 """Repeat the same layer definition."""
 
 import torch
+from torch.utils.checkpoint import checkpoint
 
 
 class MultiSequential(torch.nn.Sequential):
@@ -17,6 +18,20 @@ class MultiSequential(torch.nn.Sequential):
         for m in self:
             args = m(*args)
         return args
+
+
+class MultiSequentialCheckpointed(MultiSequential):
+    """Checkpointed MultiSequential."""
+
+    def forward(self, *args):
+        """Repeat."""
+        if self.training:
+            for m in self:
+                args = checkpoint(m, *args)
+                args = (args[0], *[arg.detach() for arg in args[1:]])
+            return args
+        else:
+            return super().forward(*args)
 
 
 class MultiSequentialArg2(torch.nn.Sequential):
@@ -34,7 +49,7 @@ class MultiSequentialArg3(torch.nn.Sequential):
 
     def forward(self, input1, input2, input3):
         """Repeat."""
-        for m in self:
+        for i, m in enumerate(self):
             input1, input2, input3 = m(input1, input2, input3)
         return input1, input2, input3
 
@@ -49,7 +64,7 @@ class MultiSequentialArg4(torch.nn.Sequential):
         return input1, input2, input3, input4
 
 
-def repeat(N, fn):
+def repeat(N, fn, checkpointed=False):
     """Repeat module N times.
 
     Args:
@@ -60,4 +75,6 @@ def repeat(N, fn):
         MultiSequential: Repeated model instance.
 
     """
+    if checkpointed:
+        return MultiSequentialCheckpointed(*[fn(n) for n in range(N)])
     return MultiSequential(*[fn(n) for n in range(N)])

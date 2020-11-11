@@ -94,6 +94,7 @@ class Encoder(torch.nn.Module):
         chunk_window=1,
         chunk_left_context=0,
         chunk_right_context=0,
+        use_checkpointing=False,
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -210,6 +211,7 @@ class Encoder(torch.nn.Module):
                 normalize_before,
                 concat_after,
             ),
+            use_checkpointing,
         )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)

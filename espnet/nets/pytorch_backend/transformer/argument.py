@@ -175,4 +175,11 @@ def add_arguments_transformer_common(group):
         type=int,
         help="Chunk right context size in frames",
     )
+    # Checkpointing
+    group.add_argument(
+        "--grad-checkpointing",
+        type=strtobool,
+        default=False,
+        help="The flag to switch to use gradient checkpointing during training",
+    )
     return group
