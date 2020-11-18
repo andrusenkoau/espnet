@@ -288,7 +288,7 @@ class E2E(ASRInterface, torch.nn.Module):
         :rtype: torch.Tensor
         """
         self.eval()
-        x = torch.as_tensor(x).unsqueeze(0)
+        x = to_device(self, torch.as_tensor(x).unsqueeze(0))
         enc_output, _ = self.encoder(x, None)
         return enc_output.squeeze(0)
 
@@ -345,7 +345,7 @@ class E2E(ASRInterface, torch.nn.Module):
         else:
             lpz = None
 
-        h = enc_output.squeeze(0)
+        h = enc_output.squeeze(0).cpu()
 
         logging.info("input lengths: " + str(h.size(0)))
         # search parms
@@ -372,7 +372,9 @@ class E2E(ASRInterface, torch.nn.Module):
         else:
             hyp = {"score": 0.0, "yseq": [y]}
         if lpz is not None:
-            ctc_prefix_score = CTCPrefixScore(lpz.detach().numpy(), 0, self.eos, numpy)
+            ctc_prefix_score = CTCPrefixScore(
+                lpz.detach().cpu().numpy(), 0, self.eos, numpy
+            )
             hyp["ctc_state_prev"] = ctc_prefix_score.initial_state()
             hyp["ctc_score_prev"] = 0.0
             if ctc_weight != 1.0:
@@ -394,8 +396,8 @@ class E2E(ASRInterface, torch.nn.Module):
                 vy[0] = hyp["yseq"][i]
 
                 # get nbest local scores and their ids
-                ys_mask = subsequent_mask(i + 1).unsqueeze(0)
-                ys = torch.tensor(hyp["yseq"]).unsqueeze(0)
+                ys_mask = to_device(self, subsequent_mask(i + 1).unsqueeze(0))
+                ys = to_device(self, torch.tensor(hyp["yseq"]).unsqueeze(0))
                 # FIXME: jit does not match non-jit result
                 if use_jit:
                     if traced_decoder is None:
@@ -407,6 +409,7 @@ class E2E(ASRInterface, torch.nn.Module):
                     local_att_scores = self.decoder.forward_one_step(
                         ys, ys_mask, enc_output
                     )[0]
+                local_att_scores = local_att_scores.cpu()
 
                 if rnnlm:
                     rnnlm_state, local_lm_scores = rnnlm.predict(hyp["rnnlm_prev"], vy)
