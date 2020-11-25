@@ -174,6 +174,10 @@ def load_trained_model(model_path, strict=True):
         model_module = train_args.model_module
     else:
         model_module = "espnet.nets.pytorch_backend.e2e_asr:E2E"
+    # CTC Loss is not needed, default to builtin to prevent import errors
+    if hasattr(train_args, "ctc_type"):
+        train_args.ctc_type = "builtin"
+
     model_class = dynamic_import(model_module)
     model = model_class(idim, odim, train_args)
 
