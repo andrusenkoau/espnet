@@ -86,6 +86,7 @@ def build_batch_sampler(
     fold_lengths: Sequence[int] = (),
     padding: bool = True,
     utt2category_file: str = None,
+    batch_bins_scale: float = 0,
 ) -> AbsSampler:
     """Helper function to instantiate BatchSampler.
 
@@ -102,6 +103,7 @@ def build_batch_sampler(
         fold_lengths: Used for "folded" mode
         padding: Whether sequences are input as a padded tensor or not.
             used for "numel" mode
+        batch_bins_scale: Used for "numel" mode
     """
     assert check_argument_types()
     if len(shape_files) == 0:
@@ -148,6 +150,7 @@ def build_batch_sampler(
             drop_last=drop_last,
             padding=padding,
             min_batch_size=min_batch_size,
+            batch_bins_scale=batch_bins_scale,
         )
 
     elif type == "length":

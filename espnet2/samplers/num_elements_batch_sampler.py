@@ -1,3 +1,4 @@
+import logging
 from typing import Iterator
 from typing import List
 from typing import Tuple
@@ -20,9 +21,11 @@ class NumElementsBatchSampler(AbsSampler):
         sort_batch: str = "ascending",
         drop_last: bool = False,
         padding: bool = True,
+        batch_bins_scale: float = 0,
     ):
         assert check_argument_types()
         assert batch_bins > 0
+        assert batch_bins_scale >= 0
         if sort_batch != "ascending" and sort_batch != "descending":
             raise ValueError(
                 f"sort_batch must be ascending or descending: {sort_batch}"
@@ -37,6 +40,8 @@ class NumElementsBatchSampler(AbsSampler):
         self.sort_in_batch = sort_in_batch
         self.sort_batch = sort_batch
         self.drop_last = drop_last
+        self.base = batch_bins_scale
+        self.scale = lambda x: x**(self.base)
 
         # utt2shape: (Length, ...)
         #    uttA 100,...
@@ -82,16 +87,26 @@ class NumElementsBatchSampler(AbsSampler):
                     max(d[keys[i]][0] for i in range(start, start + bs))
                     for d in utt2shapes
                 ]
-                bins = sum(bs * lg * d for lg, d in zip(max_lengths, feat_dims))
+                bins = sum(
+                    bs * lg * self.scale(lg) * d 
+                    for lg, d in zip(max_lengths, feat_dims)
+                )
             else:
                 bins = sum(
-                    np.prod(d[keys[i]])
+                    np.prod(d[keys[i]]) * self.scale(d[keys[i]][0])
                     for i in range(start, start + bs)
                     for d in utt2shapes
                 )
 
-            if bins > batch_bins and bs >= min_batch_size:
-                batch_sizes.append(bs)
+            if bins > batch_bins:
+                # we want batch_bins to be an upper bound of bins
+                bs -= 1
+                if bs >= min_batch_size:
+                    batch_sizes.append(bs)
+                else:
+                    # drop utterance if its bins is bigger than batch_bins
+                    logging.warning(f"Utterance {keys[start + bs]} is too big. Dropped.")
+                    del keys[start + bs]
                 start += bs
                 bs = 1
             else:
@@ -144,6 +159,7 @@ class NumElementsBatchSampler(AbsSampler):
             raise ValueError(
                 f"sort_batch must be ascending or descending: {sort_batch}"
             )
+
 
     def __repr__(self):
         return (
