@@ -41,7 +41,7 @@ class NumElementsBatchSampler(AbsSampler):
         self.sort_batch = sort_batch
         self.drop_last = drop_last
         self.base = batch_bins_scale
-        self.scale = lambda x: x**(self.base)
+        self.scale = lambda x: x ** (self.base)
 
         # utt2shape: (Length, ...)
         #    uttA 100,...
@@ -88,7 +88,7 @@ class NumElementsBatchSampler(AbsSampler):
                     for d in utt2shapes
                 ]
                 bins = sum(
-                    bs * lg * self.scale(lg) * d 
+                    bs * lg * self.scale(lg) * d
                     for lg, d in zip(max_lengths, feat_dims)
                 )
             else:
@@ -105,7 +105,9 @@ class NumElementsBatchSampler(AbsSampler):
                     batch_sizes.append(bs)
                 else:
                     # drop utterance if its bins is bigger than batch_bins
-                    logging.warning(f"Utterance {keys[start + bs]} is too big. Dropped.")
+                    logging.warning(
+                        f"Utterance {keys[start + bs]} is too big. Dropped."
+                    )
                     del keys[start + bs]
                 start += bs
                 bs = 1
@@ -159,7 +161,6 @@ class NumElementsBatchSampler(AbsSampler):
             raise ValueError(
                 f"sort_batch must be ascending or descending: {sort_batch}"
             )
-
 
     def __repr__(self):
         return (
