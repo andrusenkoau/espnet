@@ -324,7 +324,7 @@ class ASRTask(AbsTask):
 
         # 6. CTC
         ctc = CTC(
-            odim=vocab_size, encoder_output_sizse=encoder.output_size(), **args.ctc_conf
+            odim=vocab_size, encoder_output_size=encoder.output_size(), **args.ctc_conf
         )
 
         # 7. RNN-T Decoder (Not implemented)
