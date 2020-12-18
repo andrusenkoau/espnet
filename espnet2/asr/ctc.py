@@ -109,7 +109,6 @@ class CTC(torch.nn.Module):
                 tmp.write((f"name{i} {target_str}\n").encode())
                 start += th_olen[i]
             tmp.flush()
-            tmp.seek(0)
             output = subprocess.check_output(
                 ("path_weight", tmp.name, self.token_lm_path), stderr=subprocess.PIPE
             )
