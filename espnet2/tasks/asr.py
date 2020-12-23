@@ -191,6 +191,12 @@ class ASRTask(AbsTask):
             default=None,
             help="The model file of sentencepiece",
         )
+        group.add_argument(
+            "--bpe_type",
+            type=str_or_none,
+            default=None,
+            help="The bpemodel type [sentencepiece or yttm]",
+        )
         parser.add_argument(
             "--non_linguistic_symbols",
             type=str_or_none,
@@ -238,6 +244,7 @@ class ASRTask(AbsTask):
                 token_type=args.token_type,
                 token_list=args.token_list,
                 bpemodel=args.bpemodel,
+                bpe_type=args.bpe_type,
                 non_linguistic_symbols=args.non_linguistic_symbols,
                 text_cleaner=args.cleaner,
                 g2p_type=args.g2p,
