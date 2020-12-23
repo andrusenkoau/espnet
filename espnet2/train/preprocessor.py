@@ -40,6 +40,8 @@ class CommonPreprocessor(AbsPreprocessor):
         space_symbol: str = "<space>",
         non_linguistic_symbols: Union[Path, str, Iterable[str]] = None,
         delimiter: str = None,
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
         speech_name: str = "speech",
         text_name: str = "text",
     ):
@@ -60,6 +62,8 @@ class CommonPreprocessor(AbsPreprocessor):
                 space_symbol=space_symbol,
                 non_linguistic_symbols=non_linguistic_symbols,
                 g2p_type=g2p_type,
+                g2p_lexicon_path=g2p_lexicon_path,
+                g2p_lexicon_conf=g2p_lexicon_conf,
             )
             self.token_id_converter = TokenIDConverter(
                 token_list=token_list,
@@ -108,6 +112,8 @@ class CommonPreprocessor_multi(AbsPreprocessor):
         delimiter: str = None,
         speech_name: str = "speech",
         text_name: list = ["text"],
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
     ):
         super().__init__(train)
         self.train = train
@@ -117,6 +123,15 @@ class CommonPreprocessor_multi(AbsPreprocessor):
         if token_type is not None:
             if token_list is None:
                 raise ValueError("token_list is required if token_type is not None")
+            if (
+                token_type == "g2p_lexicon"
+                and g2p_lexicon_conf is not None
+                and g2p_lexicon_conf.unk_symbol != unk_symbol
+            ):
+                raise ValueError(
+                    f"unk_symbol and g2p_lexicon_conf.unk_symbol must match for "
+                    f"g2p_lexicon token_type: {unk_symbol}, g2p_lexicon_conf.unk_symbol"
+                )
             self.text_cleaner = TextCleaner(text_cleaner)
 
             self.tokenizer = build_tokenizer(
@@ -126,6 +141,8 @@ class CommonPreprocessor_multi(AbsPreprocessor):
                 space_symbol=space_symbol,
                 non_linguistic_symbols=non_linguistic_symbols,
                 g2p_type=g2p_type,
+                g2p_lexicon_path=g2p_lexicon_path,
+                g2p_lexicon_conf=g2p_lexicon_conf,
             )
             self.token_id_converter = TokenIDConverter(
                 token_list=token_list,
