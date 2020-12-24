@@ -35,6 +35,7 @@ class CommonPreprocessor(AbsPreprocessor):
         token_list: Union[Path, str, Iterable[str]] = None,
         bpemodel: Union[Path, str, Iterable[str]] = None,
         bpe_type: str = None,
+        bpe_dropout_prob: float = 0.0,
         text_cleaner: Collection[str] = None,
         g2p_type: str = None,
         unk_symbol: str = "<unk>",
@@ -57,6 +58,7 @@ class CommonPreprocessor(AbsPreprocessor):
             self.tokenizer = build_tokenizer(
                 token_type=token_type,
                 bpe_type=bpe_type,
+                bpe_dropout_prob=bpe_dropout_prob,
                 bpemodel=bpemodel,
                 delimiter=delimiter,
                 space_symbol=space_symbol,
@@ -84,7 +86,7 @@ class CommonPreprocessor(AbsPreprocessor):
             # - CMVN
             # - Data augmentation
             pass
-
+        print(f'[DEBUG]: self.tokenizer.bpe_dropout_prob is {self.tokenizer.bpe_dropout_prob}')
         if self.text_name in data and self.tokenizer is not None:
             text = data[self.text_name]
             text = self.text_cleaner(text)

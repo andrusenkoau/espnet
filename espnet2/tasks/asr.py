@@ -197,6 +197,12 @@ class ASRTask(AbsTask):
             default=None,
             help="The bpemodel type [sentencepiece or yttm]",
         )
+        group.add_argument(
+            "--bpe_dropout_prob",
+            type=float,
+            default=0.0,
+            help="BPE dropout probability for yttm [from 0.0 to 1.0]",
+        )
         parser.add_argument(
             "--non_linguistic_symbols",
             type=str_or_none,
@@ -245,6 +251,7 @@ class ASRTask(AbsTask):
                 token_list=args.token_list,
                 bpemodel=args.bpemodel,
                 bpe_type=args.bpe_type,
+                bpe_dropout_prob=args.bpe_dropout_prob,
                 non_linguistic_symbols=args.non_linguistic_symbols,
                 text_cleaner=args.cleaner,
                 g2p_type=args.g2p,

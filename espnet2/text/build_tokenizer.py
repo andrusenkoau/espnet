@@ -15,6 +15,7 @@ from espnet2.text.yttm_tokenizer import YttmTokenizer
 def build_tokenizer(
     token_type: str,
     bpe_type: str,
+    bpe_dropout_prob: float = 0.0,
     bpemodel: Union[Path, str, Iterable[str]] = None,
     non_linguistic_symbols: Union[Path, str, Iterable[str]] = None,
     remove_non_linguistic_symbols: bool = False,
@@ -35,7 +36,7 @@ def build_tokenizer(
         if bpe_type == "sentencepiece":
             return SentencepiecesTokenizer(bpemodel)
         elif bpe_type == "yttm":
-            return YttmTokenizer(bpemodel)
+            return YttmTokenizer(bpemodel, bpe_dropout_prob)
         else:
             raise ValueError('bpe_type should be "sentencepiece" or "yttm"')
 
