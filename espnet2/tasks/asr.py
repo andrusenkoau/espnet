@@ -40,6 +40,7 @@ from espnet2.layers.abs_normalize import AbsNormalize
 from espnet2.layers.global_mvn import GlobalMVN
 from espnet2.layers.utterance_mvn import UtteranceMVN
 from espnet2.tasks.abs_task import AbsTask
+from espnet2.text.phoneme_tokenizer import LexiconG2p
 from espnet2.torch_utils.initialize import initialize
 from espnet2.train.class_choices import ClassChoices
 from espnet2.train.collate_fn import CommonCollateFn
@@ -165,6 +166,18 @@ class ASRTask(AbsTask):
             help="The keyword arguments for CTC class.",
         )
         group.add_argument(
+            "--ctc_crf_den_lm_path",
+            type=str_or_none,
+            default=None,
+            help="Denominator lm path for ctc-crf loss",
+        )
+        group.add_argument(
+            "--ctc_crf_token_lm_path",
+            type=str_or_none,
+            default=None,
+            help="Token lm path for ctc-crf loss",
+        )
+        group.add_argument(
             "--model_conf",
             action=NestedDictAction,
             default=get_default_kwargs(ESPnetASRModel),
@@ -218,9 +231,27 @@ class ASRTask(AbsTask):
         parser.add_argument(
             "--g2p",
             type=str_or_none,
-            choices=[None, "g2p_en", "pyopenjtalk", "pyopenjtalk_kana"],
+            choices=[None, "g2p_en", "pyopenjtalk", "pyopenjtalk_kana", "g2p_lexicon"],
             default=None,
             help="Specify g2p method if --token_type=phn",
+        )
+        group.add_argument(
+            "--unk_symbol",
+            type=str,
+            default="<unk>",
+            help="Unknown symbol in token_list",
+        )
+        parser.add_argument(
+            "--g2p_lexicon_path",
+            type=str_or_none,
+            default=None,
+            help="Lexicon path for lexicon-based g2p",
+        )
+        parser.add_argument(
+            "--g2p_lexicon_conf",
+            action=NestedDictAction,
+            default=get_default_kwargs(LexiconG2p),
+            help="The keyword arguments for LexiconG2p class.",
         )
 
         for class_choices in cls.class_choices_list:
@@ -255,6 +286,9 @@ class ASRTask(AbsTask):
                 non_linguistic_symbols=args.non_linguistic_symbols,
                 text_cleaner=args.cleaner,
                 g2p_type=args.g2p,
+                unk_symbol=args.unk_symbol,
+                g2p_lexicon_path=args.g2p_lexicon_path,
+                g2p_lexicon_conf=args.g2p_lexicon_conf,
             )
         else:
             retval = None
@@ -338,7 +372,11 @@ class ASRTask(AbsTask):
 
         # 6. CTC
         ctc = CTC(
-            odim=vocab_size, encoder_output_size=encoder.output_size(), **args.ctc_conf
+            odim=vocab_size,
+            encoder_output_size=encoder.output_size(),
+            den_lm_path=args.ctc_crf_den_lm_path,
+            token_lm_path=args.ctc_crf_token_lm_path,
+            **args.ctc_conf,
         )
 
         # 7. RNN-T Decoder (Not implemented)

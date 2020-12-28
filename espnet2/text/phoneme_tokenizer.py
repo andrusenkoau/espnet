@@ -1,4 +1,6 @@
+from collections import defaultdict
 from pathlib import Path
+from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Union
@@ -79,6 +81,112 @@ class G2p_en:
         return phones
 
 
+class LexiconG2p:
+    """G2p based on user-provided lexicon file."""
+
+    begin_positional_mark = "‗"
+    full_positional_begin_mark = "_B"
+    full_positional_end_mark = "_E"
+    full_positional_inner_mark = "_I"
+    full_positional_singular_mark = "_S"
+
+    def _apply_mark_strip(self, token):
+        return (
+            token.lstrip(self.begin_positional_mark)
+            .rstrip(self.full_positional_begin_mark)
+            .rstrip(self.full_positional_end_mark)
+            .rstrip(self.full_positional_inner_mark)
+            .rstrip(self.full_positional_singular_mark)
+        )
+
+    def __init__(
+        self,
+        lexicon: Union[Path, str],
+        no_space: bool = True,
+        space_symbol: str = "<space>",
+        positional: Union[None, str] = None,
+        unk_word: str = "<unk>",
+        unk_phon: str = "<spn>",
+    ):
+        assert check_argument_types()
+        if positional is not None and positional != "begin" and positional != "full":
+            raise ValueError(
+                f"positional must be one of None, begin, or begin: {positional}"
+            )
+        self.no_space = no_space
+        self.space_symbol = space_symbol
+        self.positional = positional
+        self.unk_word = unk_word
+        self.unk_phon = unk_phon
+        self.g2p = defaultdict(lambda: [[self.unk_phon]])
+        self.p2g = defaultdict(lambda: [self.unk_word])
+        if isinstance(lexicon, str):
+            lexicon = Path(lexicon)
+        with lexicon.open("r", encoding="utf-8") as f:
+            for line in f:
+                word, trans = line.rstrip().split(" ", 1)
+                trans = trans.split()
+                # store all possible transcriptions
+                # in the order they are in the lexicon
+                self.g2p[word].insert(len(self.g2p[word]) - 1, trans)
+                # remove all positional marks.
+                # It should help in decoding.
+                trans = tuple([self._apply_mark_strip(t) for t in trans])
+                # store all possible words
+                # in the order they are in the lexicon
+                self.p2g[trans].insert(len(self.p2g[trans]) - 1, word)
+
+    def __call__(self, text: str) -> List[str]:
+        return self.encode(text)
+
+    def encode(self, text: str) -> List[str]:
+        # encode words with the first available transcription
+        words = text.rstrip().split()
+        trans = []
+        for word in words:
+            trans += self.g2p[word][0]
+            if not self.no_space:
+                trans.append(self.space_symbol)
+        return trans if self.no_space else trans[:-1]
+
+    def decode(self, tokens: Iterable[str]) -> str:
+        # decode transcriptions with the first available word
+        if self.no_space and self.positional is None or len(tokens) == 0:
+            return "".join(tokens)
+        word_tran = []
+        if not self.no_space or tokens[0] != self.space_symbol:
+            word_tran.append(self._apply_mark_strip(tokens[0]))
+        word_trans = [word_tran]
+        if self.no_space:
+            for token in tokens[1:]:
+                if (
+                    self.positional == "begin"
+                    and token.startswith(self.begin_positional_mark)
+                    or self.positional == "full"
+                    and (
+                        token.endswith(self.full_positional_begin_mark)
+                        or token.endswith(self.full_positional_singular_mark)
+                    )
+                ):
+                    word_tran = [self._apply_mark_strip(token)]
+                    word_trans.append(word_tran)
+                else:
+                    word_tran.append(self._apply_mark_strip(token))
+        else:
+            for token in tokens[1:]:
+                # suppose there are no space_symbols in word transcriptions
+                if token == self.space_symbol:
+                    word_tran = []
+                    word_trans.append(word_tran)
+                else:
+                    word_tran.append(self._apply_mark_strip(token))
+        words = []
+        for word_tran in word_trans:
+            if len(word_tran) > 0:
+                words.append(self.p2g[tuple(word_tran)][0])
+        return " ".join(words)
+
+
 class PhonemeTokenizer(AbsTokenizer):
     def __init__(
         self,
@@ -86,6 +194,8 @@ class PhonemeTokenizer(AbsTokenizer):
         non_linguistic_symbols: Union[Path, str, Iterable[str]] = None,
         space_symbol: str = "<space>",
         remove_non_linguistic_symbols: bool = False,
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
     ):
         assert check_argument_types()
         if g2p_type is None:
@@ -102,6 +212,18 @@ class PhonemeTokenizer(AbsTokenizer):
             self.g2p = pypinyin_g2p
         elif g2p_type == "pypinyin_g2p_phone":
             self.g2p = pypinyin_g2p_phone
+        elif g2p_type == "g2p_lexicon":
+            if g2p_lexicon_path is None:
+                raise ValueError(
+                    f"g2p_lexicon_path is required for g2p_lexicon g2p_type:"
+                    f" {g2p_lexicon_path}, {g2p_type}"
+                )
+            if space_symbol != g2p_lexicon_conf["space_symbol"]:
+                raise ValueError(
+                    f"space_symbol and g2p_lexicon_conf.space_symbol must match:"
+                    f" {space_symbol}, {g2p_lexicon_conf['space_symbol']}"
+                )
+            self.g2p = LexiconG2p(g2p_lexicon_path, **g2p_lexicon_conf)
         else:
             raise NotImplementedError(f"Not supported: g2p_type={g2p_type}")
 
@@ -146,4 +268,8 @@ class PhonemeTokenizer(AbsTokenizer):
 
     def tokens2text(self, tokens: Iterable[str]) -> str:
         # phoneme type is not invertible
-        return "".join(tokens)
+        return (
+            self.g2p.decode(tokens)
+            if self.g2p_type == "g2p_lexicon"
+            else "".join(tokens)
+        )

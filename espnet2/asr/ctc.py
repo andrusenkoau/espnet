@@ -30,7 +30,7 @@ class CTC(torch.nn.Module):
         lamb: float = 0.1,
         den_lm_path: str = None,
         token_lm_path: str = None,
-        eager_mode: bool = False,
+        ctc_crf_eager_mode: bool = False,
     ):
         assert check_argument_types()
         super().__init__()
@@ -42,7 +42,7 @@ class CTC(torch.nn.Module):
         self.lamb = lamb
         self.den_lm_path = den_lm_path
         self.token_lm_path = token_lm_path
-        self.eager_mode = eager_mode
+        self.ctc_crf_eager_mode = ctc_crf_eager_mode
         self.lms_are_set = False
 
         if self.ctc_type == "builtin":
@@ -56,12 +56,12 @@ class CTC(torch.nn.Module):
                 )
             self.ctc_loss = warp_ctc.CTCLoss(size_average=True, reduce=reduce)
         elif self.ctc_type == "ctc-crf":
-            from espnet.nets.pytorch_backend.ctc_crf import CTC_CRF_LOSS
+            from espnet2.asr.ctc_crf import CTC_CRF_LOSS
 
             if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
                 logging.warning("den_lm_path for ctc-crf is not set or not valid.")
 
-            if not self.eager_mode and (
+            if not self.ctc_crf_eager_mode and (
                 self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
             ):
                 logging.warning("token_lm_path for ctc-crf is not set or not valid.")
@@ -72,7 +72,7 @@ class CTC(torch.nn.Module):
                     " Attempt to calculate the loss will result in segmentation fault."
                 )
 
-            if self.eager_mode:
+            if self.ctc_crf_eager_mode:
                 logging.warning(
                     "ctc-crf eager mode is active. Constant path weights are not used."
                     " Expect negative and less representative loss values."
@@ -118,7 +118,7 @@ class CTC(torch.nn.Module):
                     for o in output.decode("utf-8").strip().split("\n")
                 ]
             )
-            return path_weight.mean() if self.reduce else path_weight
+            return path_weight.mean()
 
     def loss_fn(self, th_pred, th_target, th_ilen, th_olen) -> torch.Tensor:
         if self.ctc_type == "builtin":
@@ -192,7 +192,7 @@ class CTC(torch.nn.Module):
             if not self.lms_are_set:
                 if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
                     raise ValueError(f'"den_lm_path" must be valid: {self.den_lm_path}')
-                elif not self.eager_mode and (
+                elif not self.ctc_crf_eager_mode and (
                     self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
                 ):
                     raise ValueError(
@@ -200,7 +200,7 @@ class CTC(torch.nn.Module):
                     )
                 elif self.ctc_lo.weight.device.type != "cuda":
                     raise RuntimeError(
-                        f"ctc-crf must use GPU device to compute the loss."
+                        "ctc-crf must use GPU device to compute the loss."
                     )
                 else:
                     import ctc_crf_base
@@ -211,19 +211,11 @@ class CTC(torch.nn.Module):
                     logging.info("den_lm initialized")
                     self.lms_are_set = True
 
-            th_pred = th_pred.transpose(0, 1).log_softmax(2)
-
-            # ctc-crf only supports float32
-            th_pred = th_pred.to(dtype=torch.float32)
+            th_pred = th_pred.log_softmax(2)
 
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
-            if self.reduce:
-                # NOTE: sum() is needed to keep consistency since warpctc
-                # return as tensor w/ shape (1,)
-                # but builtin return as tensor w/o shape (scalar).
-                loss = loss.sum()
 
-            if not self.eager_mode:
+            if not self.ctc_crf_eager_mode:
                 loss_const = self._compute_path_weight(th_target, th_olen)
                 loss -= loss_const
             return loss
