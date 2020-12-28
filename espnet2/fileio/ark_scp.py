@@ -113,20 +113,23 @@ class ArkScpReader(collections.abc.Mapping):
 
     def __init__(self, fname: Union[Path, str], read_mat=True):
         assert check_argument_types()
+        self.read_mat = read_mat
         self.fname = Path(fname)
         self.data = (
-            read_2column_text(self.fname) if read_mat else kaldiio.load_scp(self.fname)
+            read_2column_text(self.fname)
+            if self.read_mat
+            else kaldiio.load_scp(self.fname)
         )
 
     def get_path(self, key):
-        if read_mat:
+        if self.read_mat:
             return self.data[key]
         else:
             raise NotImplementedError()
 
     def __getitem__(self, key) -> np.ndarray:
         p = self.data[key]
-        return _load_kaldi(p) if read_mat else kaldiio.load_mat(p)
+        return _load_kaldi(p) if self.read_mat else kaldiio.load_mat(p)
 
     def __contains__(self, item):
         return item

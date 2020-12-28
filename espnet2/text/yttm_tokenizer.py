@@ -3,18 +3,14 @@ from typing import Iterable
 from typing import List
 from typing import Union
 
-import youtokentome as yttm
 from typeguard import check_argument_types
+import youtokentome as yttm
 
 from espnet2.text.abs_tokenizer import AbsTokenizer
 
 
 class YttmTokenizer(AbsTokenizer):
-    def __init__(
-        self,
-        model: Union[Path, str],
-        bpe_dropout_prob: float = 0.0
-    ):
+    def __init__(self, model: Union[Path, str], bpe_dropout_prob: float = 0.0):
         assert check_argument_types()
         self.model = str(model)
         self.bpe_dropout_prob = bpe_dropout_prob
@@ -30,7 +26,11 @@ class YttmTokenizer(AbsTokenizer):
 
     def text2tokens(self, line: str, dropout_prob: float = 0.0) -> List[str]:
         self.yttm = yttm.BPE(model=self.model)
-        return self.yttm.encode([line], output_type=yttm.OutputType.SUBWORD, dropout_prob=self.bpe_dropout_prob)[0]
+        return self.yttm.encode(
+            [line],
+            output_type=yttm.OutputType.SUBWORD,
+            dropout_prob=self.bpe_dropout_prob,
+        )[0]
 
     def tokens2text(self, tokens: Iterable[str]) -> str:
-        return "".join(tokens).replace('▁', ' ')
+        return "".join(tokens).replace("▁", " ")

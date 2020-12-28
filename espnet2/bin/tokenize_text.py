@@ -208,8 +208,8 @@ def get_parser() -> argparse.ArgumentParser:
         "--bpe_type",
         default="sentencepiece",
         choices=["sentencepiece", "yttm"],
-        help="BPE model type"
-        )
+        help="BPE model type",
+    )
     parser.add_argument("--delimiter", "-d", default=None, help="The delimiter")
     parser.add_argument("--space_symbol", default="<space>", help="The space symbol")
     parser.add_argument("--bpemodel", default=None, help="The bpemodel file path")

@@ -43,7 +43,6 @@ def build_tokenizer(
         else:
             raise ValueError('bpe_type should be "sentencepiece" or "yttm"')
 
-
     elif token_type == "word":
         if remove_non_linguistic_symbols and non_linguistic_symbols is not None:
             return WordTokenizer(

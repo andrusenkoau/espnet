@@ -14,7 +14,6 @@ from typeguard import check_argument_types
 from typeguard import check_return_type
 from typing import List
 
-from espnet2.fileio.ark_scp import ArkScpWriter
 from espnet.nets.batch_beam_search import BatchBeamSearch
 from espnet.nets.beam_search import BeamSearch
 from espnet.nets.beam_search import Hypothesis
@@ -22,6 +21,7 @@ from espnet.nets.scorer_interface import BatchScorerInterface
 from espnet.nets.scorers.ctc import CTCPrefixScorer
 from espnet.nets.scorers.length_bonus import LengthBonus
 from espnet.utils.cli_utils import get_commandline_args
+from espnet2.fileio.ark_scp import ArkScpWriter
 from espnet2.fileio.datadir_writer import DatadirWriter
 from espnet2.tasks.asr import ASRTask
 from espnet2.tasks.lm import LMTask
@@ -143,7 +143,9 @@ class Speech2Text:
             tokenizer = None
         elif token_type == "bpe":
             if bpemodel is not None:
-                tokenizer = build_tokenizer(token_type=token_type, bpemodel=bpemodel, bpe_type=bpe_type)
+                tokenizer = build_tokenizer(
+                    token_type=token_type, bpemodel=bpemodel, bpe_type=bpe_type
+                )
             else:
                 tokenizer = None
         else:
@@ -251,7 +253,6 @@ class Speech2Logits:
         assert check_argument_types()
 
         # 1. Build ASR model
-        scorers = {}
         asr_model, asr_train_args = ASRTask.build_model_from_file(
             asr_train_config, asr_model_file, device
         )
@@ -259,7 +260,7 @@ class Speech2Logits:
 
         ctc = CTCPrefixScorer(ctc=asr_model.ctc, eos=asr_model.eos)
         ctc.to(device=device, dtype=getattr(torch, dtype)).eval()
-        logging.info(f"Beam_search: {beam_search}")
+        logging.info(f"CTC: {ctc}")
         logging.info(f"Decoding device={device}, dtype={dtype}")
 
         self.asr_model = asr_model
