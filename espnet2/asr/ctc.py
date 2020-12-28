@@ -213,9 +213,6 @@ class CTC(torch.nn.Module):
 
             th_pred = th_pred.log_softmax(2)
 
-            # ctc-crf only supports float32
-            th_pred = th_pred.to(dtype=torch.float32)
-
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
 
             if not self.ctc_crf_eager_mode:
