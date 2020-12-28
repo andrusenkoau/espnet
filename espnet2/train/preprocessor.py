@@ -90,7 +90,7 @@ class CommonPreprocessor(AbsPreprocessor):
             # - CMVN
             # - Data augmentation
             pass
-        #print(f'[DEBUG]: self.tokenizer.bpe_dropout_prob is {self.tokenizer.bpe_dropout_prob}')
+
         if self.text_name in data and self.tokenizer is not None:
             text = data[self.text_name]
             text = self.text_cleaner(text)
