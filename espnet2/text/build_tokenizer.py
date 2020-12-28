@@ -10,10 +10,13 @@ from espnet2.text.char_tokenizer import CharTokenizer
 from espnet2.text.phoneme_tokenizer import PhonemeTokenizer
 from espnet2.text.sentencepiece_tokenizer import SentencepiecesTokenizer
 from espnet2.text.word_tokenizer import WordTokenizer
+from espnet2.text.yttm_tokenizer import YttmTokenizer
 
 
 def build_tokenizer(
     token_type: str,
+    bpe_type: str,
+    bpe_dropout_prob: float = 0.0,
     bpemodel: Union[Path, str, Iterable[str]] = None,
     non_linguistic_symbols: Union[Path, str, Iterable[str]] = None,
     remove_non_linguistic_symbols: bool = False,
@@ -33,7 +36,13 @@ def build_tokenizer(
             raise RuntimeError(
                 "remove_non_linguistic_symbols is not implemented for token_type=bpe"
             )
-        return SentencepiecesTokenizer(bpemodel)
+        if bpe_type == "sentencepiece":
+            return SentencepiecesTokenizer(bpemodel)
+        elif bpe_type == "yttm":
+            return YttmTokenizer(bpemodel, bpe_dropout_prob)
+        else:
+            raise ValueError('bpe_type should be "sentencepiece" or "yttm"')
+
 
     elif token_type == "word":
         if remove_non_linguistic_symbols and non_linguistic_symbols is not None:
