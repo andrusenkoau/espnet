@@ -15,8 +15,6 @@ from espnet2.text.yttm_tokenizer import YttmTokenizer
 
 def build_tokenizer(
     token_type: str,
-    bpe_type: str,
-    bpe_dropout_prob: float = 0.0,
     bpemodel: Union[Path, str, Iterable[str]] = None,
     non_linguistic_symbols: Union[Path, str, Iterable[str]] = None,
     remove_non_linguistic_symbols: bool = False,
@@ -25,6 +23,8 @@ def build_tokenizer(
     g2p_type: str = None,
     g2p_lexicon_path: Union[Path, str] = None,
     g2p_lexicon_conf: Dict = None,
+    bpe_type: str = None,
+    bpe_dropout_prob: float = 0.0,
 ) -> AbsTokenizer:
     """A helper function to instantiate Tokenizer"""
     assert check_argument_types()

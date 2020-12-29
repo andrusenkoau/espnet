@@ -258,9 +258,9 @@ class Speech2Logits:
         )
         asr_model.to(dtype=getattr(torch, dtype)).eval()
 
-        ctc = CTCPrefixScorer(ctc=asr_model.ctc, eos=asr_model.eos)
-        ctc.to(device=device, dtype=getattr(torch, dtype)).eval()
-        logging.info(f"CTC: {ctc}")
+        self.ctc = asr_model.ctc
+        self.ctc.to(device=device, dtype=getattr(torch, dtype)).eval()
+        logging.info(f"CTC: {self.ctc}")
         logging.info(f"Decoding device={device}, dtype={dtype}")
 
         self.asr_model = asr_model
@@ -274,7 +274,7 @@ class Speech2Logits:
     def __call__(
         self,
         speech: Union[torch.Tensor, np.ndarray],
-        lengths: Union[torch.Tensor, List[int]],
+        speech_lengths: Union[torch.Tensor, List[int]],
     ) -> List[torch.Tensor]:
         """Inference
 
@@ -289,11 +289,11 @@ class Speech2Logits:
         # Input as audio signal
         if isinstance(speech, np.ndarray):
             speech = torch.tensor(speech)
-        if isinstance(lengths, list):
-            lengths = torch.LongTensor(lengths)
+        if isinstance(speech_lengths, list):
+            speech_lengths = torch.LongTensor(speech_lengths)
 
         speech = speech.to(getattr(torch, self.dtype))
-        batch = {"speech": speech, "speech_lengths": lengths}
+        batch = {"speech": speech, "speech_lengths": speech_lengths}
 
         # a. To device
         batch = to_device(batch, device=self.device)
@@ -303,7 +303,7 @@ class Speech2Logits:
         logits = self.ctc.log_softmax(enc)
 
         results = []
-        for logit, l in enumerate(logits, enc_lengths):
+        for logit, l in zip(logits, enc_lengths):
             results.append(logit[:l])
 
         assert check_return_type(results)
@@ -423,8 +423,8 @@ def inference(
                 results = speech2target(**batch)
                 assert len(keys) == len(results), f"{len(keys)} != {len(results)}"
 
-                for key, result in enumerate(keys, results):
-                    writer[key] = result
+                for key, result in zip(keys, results):
+                    writer[key] = result.cpu().data.numpy()
     elif target_type == "text":
         with DatadirWriter(output_dir) as writer:
             for keys, batch in loader:

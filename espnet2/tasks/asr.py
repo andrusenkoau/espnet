@@ -208,6 +208,7 @@ class ASRTask(AbsTask):
             "--bpe_type",
             type=str_or_none,
             default=None,
+            choices=["sentencepiece", "yttm", None],
             help="The bpemodel type [sentencepiece or yttm]",
         )
         group.add_argument(
