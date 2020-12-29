@@ -23,13 +23,13 @@ class CTC(torch.nn.Module):
         self,
         odim: int,
         encoder_output_size: int,
+        den_lm_path: str,
+        token_lm_path: str,
         dropout_rate: float = 0.0,
         ctc_type: str = "builtin",
         reduce: bool = True,
         ignore_nan_grad: bool = False,
         lamb: float = 0.1,
-        den_lm_path: str = None,
-        token_lm_path: str = None,
         ctc_crf_eager_mode: bool = False,
     ):
         assert check_argument_types()
