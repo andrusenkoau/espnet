@@ -29,7 +29,13 @@ def test_ctc_forward_backward(ctc_type, ctc_args):
             token_lm_path=token_lm_path,
         )
     else:
-        ctc = CTC(encoder_output_size=10, odim=5, ctc_type=ctc_type)
+        ctc = CTC(
+            encoder_output_size=10,
+            odim=5,
+            ctc_type=ctc_type,
+            den_lm_path=None,
+            token_lm_path=None,
+        )
     ctc(*ctc_args).sum().backward()
 
 
@@ -37,7 +43,13 @@ def test_ctc_forward_backward(ctc_type, ctc_args):
 def test_ctc_log_softmax(ctc_type, ctc_args):
     if ctc_type == "warpctc":
         pytest.importorskip("warpctc_pytorch")
-    ctc = CTC(encoder_output_size=10, odim=5, ctc_type=ctc_type)
+    ctc = CTC(
+        encoder_output_size=10,
+        odim=5,
+        ctc_type=ctc_type,
+        den_lm_path=None,
+        token_lm_path=None,
+    )
     ctc.log_softmax(ctc_args[0])
 
 
@@ -45,5 +57,11 @@ def test_ctc_log_softmax(ctc_type, ctc_args):
 def test_ctc_argmax(ctc_type, ctc_args):
     if ctc_type == "warpctc":
         pytest.importorskip("warpctc_pytorch")
-    ctc = CTC(encoder_output_size=10, odim=5, ctc_type=ctc_type)
+    ctc = CTC(
+        encoder_output_size=10,
+        odim=5,
+        ctc_type=ctc_type,
+        den_lm_path=None,
+        token_lm_path=None,
+    )
     ctc.argmax(ctc_args[0])

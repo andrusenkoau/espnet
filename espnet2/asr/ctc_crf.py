@@ -35,7 +35,7 @@ class _CRF(torch.autograd.Function):
 
         grad = grad[::2]
         costs_all = costs_alpha_den[::2]
-        costs = torch.FloatTensor([costs_all.sum()]).to(logits.get_device())
+        costs = torch.FloatTensor(costs_all).to(logits.get_device())
 
         if size_average:
             grad = grad / batch_size
@@ -65,7 +65,7 @@ class CTC_CRF_LOSS(torch.nn.Module):
     :param bool size_average: perform size average
     """
 
-    def __init__(self, lamb=0.1, size_average=True):
+    def __init__(self, lamb=0.1, size_average=True, reduce=True):
         """Construct a CTC_CRF_LOSS object."""
         super(CTC_CRF_LOSS, self).__init__()
         self.crf = _CRF.apply
@@ -97,7 +97,10 @@ class CTC_CRF_LOSS(torch.nn.Module):
             label_lengths,
             self.size_average,
         )
-        ctc_cost = self.ctc(logits, labels, input_lengths, label_lengths).sum()
+        ctc_cost = self.ctc(logits, labels, input_lengths, label_lengths)
         if self.size_average:
             ctc_cost /= logits.size(1)
-        return crf_cost + (1 + self.lamb) * ctc_cost
+        cost = crf_cost + (1 + self.lamb) * ctc_cost
+        if self.reduce:
+            cost = cost.sum()
+        return cost

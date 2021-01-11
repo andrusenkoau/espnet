@@ -20,6 +20,8 @@ class CTC(torch.nn.Module):
         reduce: reduce the CTC loss into a scalar
     """
 
+    ctc_types = ("builtin", "warpctc", "ctc-crf")
+
     def __init__(
         self,
         odim: int,
@@ -32,8 +34,14 @@ class CTC(torch.nn.Module):
         ignore_nan_grad: bool = False,
         lamb: float = 0.1,
         ctc_crf_eager_mode: bool = False,
+        focal: bool = False,
+        focal_alpha: float = 1.0,
+        focal_gamma: float = 2.0,
     ):
         assert check_argument_types()
+        assert (
+            ctc_type in self.ctc_types
+        ), f"ctc_type must be ine of the {self.ctc_types}: {self.ctc_type}"
         super().__init__()
         eprojs = encoder_output_size
         self.dropout_rate = dropout_rate
@@ -45,6 +53,9 @@ class CTC(torch.nn.Module):
         self.token_lm_path = token_lm_path
         self.ctc_crf_eager_mode = ctc_crf_eager_mode
         self.lms_are_set = False
+        self.focal = focal
+        self.focal_alpha = focal_alpha
+        self.focal_gamma = focal_gamma
 
         if self.ctc_type == "builtin":
             self.ctc_loss = torch.nn.CTCLoss(reduction="none")
@@ -55,7 +66,7 @@ class CTC(torch.nn.Module):
                 raise NotImplementedError(
                     "ignore_nan_grad option is not supported for warp_ctc"
                 )
-            self.ctc_loss = warp_ctc.CTCLoss(size_average=True, reduce=reduce)
+            self.ctc_loss = warp_ctc.CTCLoss(size_average=False, reduce=False)
         elif self.ctc_type == "ctc-crf":
             from espnet2.asr.ctc_crf import CTC_CRF_LOSS
 
@@ -83,11 +94,9 @@ class CTC(torch.nn.Module):
                 raise NotImplementedError(
                     "ignore_nan_grad option is not supported for ctc-crf"
                 )
-            self.ctc_loss = CTC_CRF_LOSS(size_average=True, lamb=lamb)
+            self.ctc_loss = CTC_CRF_LOSS(size_average=False, reduce=False, lamb=lamb)
         else:
-            raise ValueError(
-                f'ctc_type must be "builtin", "warpctc", or "ctc-crf": {self.ctc_type}'
-            )
+            raise NotImplementedError
 
         self.reduce = reduce
 
@@ -120,6 +129,9 @@ class CTC(torch.nn.Module):
                 ]
             )
             return path_weight.mean()
+
+    def _compute_focal_loss(self, loss):
+        return self.focal_alpha * (1 - torch.exp(-loss)) ** self.focal_gamma * loss
 
     def loss_fn(self, th_pred, th_target, th_ilen, th_olen) -> torch.Tensor:
         if self.ctc_type == "builtin":
@@ -168,26 +180,27 @@ class CTC(torch.nn.Module):
             else:
                 size = th_pred.size(1)
 
-            if self.reduce:
-                # Batch-size average
-                loss = loss.sum() / size
-            else:
-                loss = loss / size
-            return loss
+            # if self.reduce:
+            # Batch-size average
+            # loss = loss.sum() / size
+            # else:
+            # loss = loss / size
+            # return loss
         elif self.ctc_type == "warpctc":
             # warpctc only supports float32
             th_pred = th_pred.to(dtype=torch.float32)
+            size = th_pred.size(1)
 
             th_target = th_target.cpu().int()
             th_ilen = th_ilen.cpu().int()
             th_olen = th_olen.cpu().int()
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
-            if self.reduce:
-                # NOTE: sum() is needed to keep consistency since warpctc
-                # return as tensor w/ shape (1,)
-                # but builtin return as tensor w/o shape (scalar).
-                loss = loss.sum()
-            return loss
+            # if self.reduce:
+            # NOTE: sum() is needed to keep consistency since warpctc
+            # return as tensor w/ shape (1,)
+            # but builtin return as tensor w/o shape (scalar).
+            # loss = loss.sum()
+            # return loss
         elif self.ctc_type == "ctc-crf":
             # runtime den_lm initialization check
             if not self.lms_are_set:
@@ -213,15 +226,30 @@ class CTC(torch.nn.Module):
                     self.lms_are_set = True
 
             th_pred = th_pred.log_softmax(2)
+            size = th_pred.size(1)
 
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
 
             if not self.ctc_crf_eager_mode:
                 loss_const = self._compute_path_weight(th_target, th_olen)
                 loss -= loss_const
-            return loss
+            # return loss
         else:
             raise NotImplementedError
+
+        # Compute focal CTC loss
+        # Check more detils in Feng et al, 2019, "Focal CTC Loss for Chinese Optical
+        #                               Character Recognition on Unbalanced Datasets"
+        if self.focal:
+            loss = self._compute_focal_loss(loss)
+
+        if self.reduce:
+            # Batch-size average
+            loss = loss.sum() / size
+        else:
+            loss = loss / size
+
+        return loss
 
     def forward(self, hs_pad, hlens, ys_pad, ys_lens):
         """Calculate CTC loss.
