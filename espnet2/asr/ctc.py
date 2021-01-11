@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import tempfile
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -23,8 +24,8 @@ class CTC(torch.nn.Module):
         self,
         odim: int,
         encoder_output_size: int,
-        den_lm_path: str,
-        token_lm_path: str,
+        den_lm_path: Optional[str],
+        token_lm_path: Optional[str],
         dropout_rate: float = 0.0,
         ctc_type: str = "builtin",
         reduce: bool = True,
