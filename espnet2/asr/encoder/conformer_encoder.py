@@ -34,6 +34,7 @@ from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling6
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling8
+from espnet.utils.dynamic_import import dynamic_import
 from espnet2.asr.encoder.abs_encoder import AbsEncoder
 
 
@@ -66,6 +67,9 @@ class ConformerEncoder(AbsEncoder):
         padding_idx (int): Padding idx for input_layer=embed.
 
     """
+
+    # track the number of arguments of sequential modules for JIT disamdiguation
+    num_sequential_args = 3
 
     def __init__(
         self,
@@ -221,8 +225,8 @@ class ConformerEncoder(AbsEncoder):
         self,
         xs_pad: torch.Tensor,
         ilens: torch.Tensor,
-        prev_states: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        prev_states: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         """Calculate forward propagation.
 
         Args:
@@ -250,5 +254,19 @@ class ConformerEncoder(AbsEncoder):
         if self.normalize_before:
             xs_pad = self.after_norm(xs_pad)
 
-        olens = masks.squeeze(1).sum(1)
+        if masks is not None:
+            olens = masks.squeeze(1).sum(1)
+        else:
+            olens = None
         return xs_pad, olens, None
+
+    def scripting_prep(self):
+        """Torch.jit stripting preparations."""
+        # disambiguate MultiSequential encoders
+        file_path = "espnet.nets.pytorch_backend.transformer.repeat"
+        encoders_class_name = "{}:MultiSequentialArg{}".format(
+            file_path,
+            self.num_sequential_args,
+        )
+        encoders_class = dynamic_import(encoders_class_name)
+        self.encoders = encoders_class(*[layer for layer in self.encoders])
