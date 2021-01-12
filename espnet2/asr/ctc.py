@@ -20,7 +20,7 @@ class CTC(torch.nn.Module):
         reduce: reduce the CTC loss into a scalar
     """
 
-    ctc_types = ("builtin", "warpctc", "ctc-crf")
+    _ctc_types = ("builtin", "warpctc", "ctc-crf")
 
     def __init__(
         self,
@@ -40,8 +40,8 @@ class CTC(torch.nn.Module):
     ):
         assert check_argument_types()
         assert (
-            ctc_type in self.ctc_types
-        ), f"ctc_type must be ine of the {self.ctc_types}: {self.ctc_type}"
+            ctc_type in self._ctc_types
+        ), f"ctc_type must be one of the following: {self._ctc_types}; {self.ctc_type}"
         super().__init__()
         eprojs = encoder_output_size
         self.dropout_rate = dropout_rate
