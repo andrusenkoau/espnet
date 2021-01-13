@@ -80,7 +80,11 @@ class Encoder(torch.nn.Module):
         else:
             xs = self.embed(xs)
 
-        xs, masks = self.encoders(xs, masks)[:2]
+        xs, masks = (
+            self.encoders(xs[0], masks, xs[1])
+            if isinstance(xs, tuple)
+            else self.encoders(xs, masks)
+        )[:2]
 
         if self.normalize_before:
             xs = self.after_norm(xs)
