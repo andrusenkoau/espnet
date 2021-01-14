@@ -24,6 +24,7 @@ def build_tokenizer(
     g2p_lexicon_path: Union[Path, str] = None,
     g2p_lexicon_conf: Dict = None,
     bpe_type: str = None,
+    bpe_alpha: float = 0.0,
     bpe_dropout_prob: float = 0.0,
 ) -> AbsTokenizer:
     """A helper function to instantiate Tokenizer"""
@@ -37,7 +38,7 @@ def build_tokenizer(
                 "remove_non_linguistic_symbols is not implemented for token_type=bpe"
             )
         if bpe_type == "sentencepiece":
-            return SentencepiecesTokenizer(bpemodel)
+            return SentencepiecesTokenizer(bpemodel, bpe_alpha)
         elif bpe_type == "yttm":
             return YttmTokenizer(bpemodel, bpe_dropout_prob)
         else:

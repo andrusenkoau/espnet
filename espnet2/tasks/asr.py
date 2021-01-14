@@ -212,6 +212,12 @@ class ASRTask(AbsTask):
             help="The bpemodel type [sentencepiece or yttm]",
         )
         group.add_argument(
+            "--bpe_alpha",
+            type=float,
+            default=0.0,
+            help="(smoothing parameter for unigram [0.0, inf]) or (bpe dropout probability for bpe [0.0, 1.0])",
+        )
+        group.add_argument(
             "--bpe_dropout_prob",
             type=float,
             default=0.0,
@@ -283,6 +289,7 @@ class ASRTask(AbsTask):
                 token_list=args.token_list,
                 bpemodel=args.bpemodel,
                 bpe_type=args.bpe_type,
+                bpe_alpha=args.bpe_alpha,
                 bpe_dropout_prob=args.bpe_dropout_prob,
                 non_linguistic_symbols=args.non_linguistic_symbols,
                 text_cleaner=args.cleaner,
