@@ -40,9 +40,9 @@ class Speech2Text:
 
     Examples:
         >>> import soundfile
-        >>> speech2text = Speech2Text("asr_config.yml", "asr.pth")
+        >>> speech2target = Speech2Text("asr_config.yml", "asr.pth")
         >>> audio, rate = soundfile.read("speech.wav")
-        >>> speech2text(audio)
+        >>> speech2target(audio)
         [(text, token, token_int, hypothesis object), ...]
 
     """
@@ -231,9 +231,9 @@ class Speech2Logits:
 
     Examples:
         >>> import soundfile
-        >>> speech2text = Speech2Text("asr_config.yml", "asr.pth")
+        >>> speech2target = Speech2Logits("asr_config.yml", "asr.pth")
         >>> audio, rate = soundfile.read("speech.wav")
-        >>> speech2text([audio])
+        >>> speech2target([audio])
         [logit tensor, ]
 
     """
@@ -374,7 +374,7 @@ def inference(
             dtype=dtype,
         )
     elif target_type == "text":
-        Speech2Text(
+        speech2target = Speech2Text(
             asr_train_config=asr_train_config,
             asr_model_file=asr_model_file,
             lm_train_config=lm_train_config,
