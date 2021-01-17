@@ -3,6 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
+from typing import Dict
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -26,10 +27,12 @@ from espnet2.fileio.datadir_writer import DatadirWriter
 from espnet2.tasks.asr import ASRTask
 from espnet2.tasks.lm import LMTask
 from espnet2.text.build_tokenizer import build_tokenizer
+from espnet2.text.phoneme_tokenizer import LexiconG2p
 from espnet2.text.token_id_converter import TokenIDConverter
 from espnet2.torch_utils.device_funcs import to_device
 from espnet2.torch_utils.set_all_random_seed import set_all_random_seed
 from espnet2.utils import config_argparse
+from espnet2.utils.nested_dict_action import NestedDictAction
 from espnet2.utils.types import str2bool
 from espnet2.utils.types import str2triple_str
 from espnet2.utils.types import str_or_none
@@ -56,6 +59,10 @@ class Speech2Text:
         token_type: str = None,
         bpemodel: str = None,
         bpe_type: str = None,
+        g2p_type: str = None,
+        unk_symbol: str = None,
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
         device: str = "cpu",
         maxlenratio: float = 0.0,
         minlenratio: float = 0.0,
@@ -148,9 +155,26 @@ class Speech2Text:
                 )
             else:
                 tokenizer = None
+        elif token_type == "phn":
+            if g2p_type is None:
+                g2p_type = asr_train_args.g2p
+            if g2p_type == "g2p_lexicon":
+                if g2p_lexicon_path is None:
+                    g2p_lexicon_path = asr_train_args.g2p_lexicon_path
+                if g2p_lexicon_conf is None:
+                    g2p_lexicon_conf = asr_train_args.g2p_lexicon_conf
+            tokenizer = build_tokenizer(
+                token_type=token_type,
+                g2p_type=g2p_type,
+                g2p_lexicon_path=g2p_lexicon_path,
+                g2p_lexicon_conf=g2p_lexicon_conf,
+            )
         else:
             tokenizer = build_tokenizer(token_type=token_type)
-        converter = TokenIDConverter(token_list=token_list)
+
+        if unk_symbol is None:
+            unk_symbol = asr_train_args.unk_symbol
+        converter = TokenIDConverter(token_list=token_list, unk_symbol=unk_symbol)
         logging.info(f"Text tokenizer: {tokenizer}")
 
         self.asr_model = asr_model
@@ -337,6 +361,10 @@ def inference(
     bpemodel: Optional[str],
     bpe_type: Optional[str],
     allow_variable_data_keys: bool,
+    g2p: Optional[str],
+    unk_symbol: Optional[str],
+    g2p_lexicon_path: Optional[Union[Path, str]],
+    g2p_lexicon_conf: Optional[Dict],
     target_type: str,
 ):
     assert check_argument_types()
@@ -382,6 +410,10 @@ def inference(
             token_type=token_type,
             bpemodel=bpemodel,
             bpe_type=bpe_type,
+            g2p_type=g2p,
+            unk_symbol=unk_symbol,
+            g2p_lexicon_path=g2p_lexicon_path,
+            g2p_lexicon_conf=g2p_lexicon_conf,
             device=device,
             maxlenratio=maxlenratio,
             minlenratio=minlenratio,
@@ -558,7 +590,7 @@ def get_parser():
         "--token_type",
         type=str_or_none,
         default=None,
-        choices=["char", "bpe", None],
+        choices=["char", "bpe", "phn", None],
         help="The token type for ASR model. "
         "If not given, refers from the training args",
     )
@@ -574,6 +606,31 @@ def get_parser():
         type=str_or_none,
         default=None,
         help="The bpemodel type [sentencepiece or yttm]",
+    )
+    group.add_argument(
+        "--g2p",
+        type=str_or_none,
+        choices=[None, "g2p_en", "pyopenjtalk", "pyopenjtalk_kana", "g2p_lexicon"],
+        default=None,
+        help="Specify g2p method if --token_type=phn",
+    )
+    group.add_argument(
+        "--unk_symbol",
+        type=str_or_none,
+        default=None,
+        help="Unknown symbol in token_list",
+    )
+    group.add_argument(
+        "--g2p_lexicon_path",
+        type=str_or_none,
+        default=None,
+        help="Lexicon path for lexicon-based g2p",
+    )
+    group.add_argument(
+        "--g2p_lexicon_conf",
+        action=NestedDictAction,
+        default=None,
+        help="The keyword arguments for LexiconG2p class.",
     )
 
     return parser

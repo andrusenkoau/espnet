@@ -93,10 +93,11 @@ class LexiconG2p:
     def _apply_mark_strip(self, token):
         return (
             token.lstrip(self.begin_positional_mark)
-            .rstrip(self.full_positional_begin_mark)
-            .rstrip(self.full_positional_end_mark)
-            .rstrip(self.full_positional_inner_mark)
-            .rstrip(self.full_positional_singular_mark)
+            if self.positional == "begin"
+            else token.replace(self.full_positional_begin_mark, "")
+            .replace(self.full_positional_end_mark, "")
+            .replace(self.full_positional_inner_mark, "")
+            .replace(self.full_positional_singular_mark, "")
         )
 
     def __init__(
