@@ -51,9 +51,6 @@ class ESPnetASRModel(AbsESPnetModel):
         ignore_id: int = -1,
         lsm_weight: float = 0.0,
         length_normalized_loss: bool = False,
-        focal_loss: bool = False,
-        focal_alpha: float = 1.0,
-        focal_gamma: float = 2.0,
         report_cer: bool = True,
         report_wer: bool = True,
         sym_space: str = "<space>",
@@ -88,9 +85,6 @@ class ESPnetASRModel(AbsESPnetModel):
             padding_idx=ignore_id,
             smoothing=lsm_weight,
             normalize_length=length_normalized_loss,
-            focal=focal_loss,
-            focal_alpha=focal_alpha,
-            focal_gamma=focal_gamma,
         )
 
         if report_cer or report_wer:

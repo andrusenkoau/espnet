@@ -35,7 +35,6 @@ class CTC(torch.nn.Module):
         lamb: float = 0.1,
         ctc_crf_eager_mode: bool = False,
         focal: bool = False,
-        focal_alpha: float = 1.0,
         focal_gamma: float = 2.0,
     ):
         assert check_argument_types()
@@ -54,7 +53,6 @@ class CTC(torch.nn.Module):
         self.ctc_crf_eager_mode = ctc_crf_eager_mode
         self.lms_are_set = False
         self.focal = focal
-        self.focal_alpha = focal_alpha
         self.focal_gamma = focal_gamma
 
         if self.ctc_type == "builtin":
@@ -130,8 +128,8 @@ class CTC(torch.nn.Module):
             )
             return path_weight.mean()
 
-    def _compute_focal_loss(self, loss):
-        return self.focal_alpha * (1 - torch.exp(-loss)) ** self.focal_gamma * loss
+    def _compute_focal_loss(self, loss, ilen):
+        return (1 - torch.exp(-loss.div(ilen))) ** self.focal_gamma * loss
 
     def loss_fn(self, th_pred, th_target, th_ilen, th_olen) -> torch.Tensor:
         if self.ctc_type == "builtin":
@@ -241,7 +239,10 @@ class CTC(torch.nn.Module):
         # Check more detils in Feng et al, 2019, "Focal CTC Loss for Chinese Optical
         #                               Character Recognition on Unbalanced Datasets"
         if self.focal:
-            loss = self._compute_focal_loss(loss)
+            # Restore source loss values but change gradients
+            loss_source = loss.detach()
+            loss = self._compute_focal_loss(loss, th_ilen)
+            loss += loss_source - loss.detach()
 
         if self.reduce:
             # Batch-size average

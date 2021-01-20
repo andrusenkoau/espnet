@@ -18,6 +18,7 @@ def _assert_no_grad(tensor):
 class _CRF(torch.autograd.Function):
     @staticmethod
     def forward(ctx, logits, labels, input_lengths, label_lengths, size_average=True):
+        logits = logits.transpose(0, 1).to(dtype=torch.float32)
         # For an unclear reason, gpu_den returns -inf for every second utterance.
         # So there is a workaround as follows.
         batch_size, seq_len, feat_dim = logits.size()
@@ -34,21 +35,22 @@ class _CRF(torch.autograd.Function):
         )
 
         grad = grad[::2]
-        costs_all = costs_alpha_den[::2]
-        costs = torch.FloatTensor(costs_all).to(logits.get_device())
+        costs = costs_alpha_den[::2]
 
         if size_average:
             grad = grad / batch_size
             costs = costs / batch_size
 
-        ctx.grads = grad
+        ctx.grads = grad.transpose(0, 1)
 
         return costs
 
     @staticmethod
     def backward(ctx, grad_output):
         return (
-            ctx.grads * grad_output.to(ctx.grads.device),
+            ctx.grads.transpose(1, -1)
+            .mul(grad_output.to(ctx.grads.device))
+            .transpose(1, -1),
             None,
             None,
             None,
@@ -72,6 +74,7 @@ class CTC_CRF_LOSS(torch.nn.Module):
         self.ctc = torch.nn.CTCLoss(reduction="none")
         self.lamb = lamb
         self.size_average = size_average
+        self.reduce = reduce
 
     def forward(self, logits, labels, input_lengths, label_lengths):
         """CTC-CRF forward.
@@ -91,7 +94,7 @@ class CTC_CRF_LOSS(torch.nn.Module):
 
         # crf only supports float32
         crf_cost = self.crf(
-            logits.transpose(0, 1).to(dtype=torch.float32),
+            logits,
             labels,
             input_lengths,
             label_lengths,
