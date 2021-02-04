@@ -205,17 +205,10 @@ class ASRTask(AbsTask):
             help="The model file of sentencepiece",
         )
         group.add_argument(
-            "--bpe_type",
-            type=str_or_none,
-            default=None,
-            choices=["sentencepiece", "yttm", None],
-            help="The bpemodel type [sentencepiece or yttm]",
-        )
-        group.add_argument(
-            "--bpe_dropout_prob",
+            "--bpe_alpha",
             type=float,
             default=0.0,
-            help="BPE dropout probability for yttm [from 0.0 to 1.0]",
+            help="(smoothing parameter for unigram [0.0, inf]) or (bpe dropout probability for bpe [0.0, 1.0])",
         )
         parser.add_argument(
             "--non_linguistic_symbols",
@@ -282,8 +275,7 @@ class ASRTask(AbsTask):
                 token_type=args.token_type,
                 token_list=args.token_list,
                 bpemodel=args.bpemodel,
-                bpe_type=args.bpe_type,
-                bpe_dropout_prob=args.bpe_dropout_prob,
+                bpe_alpha=args.bpe_alpha,
                 non_linguistic_symbols=args.non_linguistic_symbols,
                 text_cleaner=args.cleaner,
                 g2p_type=args.g2p,
