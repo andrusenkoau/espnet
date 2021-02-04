@@ -10,7 +10,7 @@ from espnet2.text.char_tokenizer import CharTokenizer
 from espnet2.text.phoneme_tokenizer import PhonemeTokenizer
 from espnet2.text.sentencepiece_tokenizer import SentencepiecesTokenizer
 from espnet2.text.word_tokenizer import WordTokenizer
-from espnet2.text.yttm_tokenizer import YttmTokenizer
+
 
 
 def build_tokenizer(

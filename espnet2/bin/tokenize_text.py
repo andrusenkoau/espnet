@@ -66,7 +66,6 @@ def tokenize(
     field: Optional[str],
     delimiter: Optional[str],
     token_type: str,
-    bpe_type: str,
     space_symbol: str,
     non_linguistic_symbols: Optional[str],
     bpemodel: Optional[str],
@@ -99,7 +98,6 @@ def tokenize(
     cleaner = TextCleaner(cleaner)
     tokenizer = build_tokenizer(
         token_type=token_type,
-        bpe_type=bpe_type,
         bpemodel=bpemodel,
         delimiter=delimiter,
         space_symbol=space_symbol,
@@ -203,12 +201,6 @@ def get_parser() -> argparse.ArgumentParser:
         default="char",
         choices=["char", "bpe", "word", "phn"],
         help="Token type",
-    )
-    parser.add_argument(
-        "--bpe_type",
-        default="sentencepiece",
-        choices=["sentencepiece", "yttm"],
-        help="BPE model type",
     )
     parser.add_argument("--delimiter", "-d", default=None, help="The delimiter")
     parser.add_argument("--space_symbol", default="<space>", help="The space symbol")
