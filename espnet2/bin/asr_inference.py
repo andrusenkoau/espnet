@@ -58,7 +58,6 @@ class Speech2Text:
         lm_file: Union[Path, str] = None,
         token_type: str = None,
         bpemodel: str = None,
-        bpe_type: str = None,
         g2p_type: str = None,
         unk_symbol: str = None,
         g2p_lexicon_path: Union[Path, str] = None,
@@ -143,15 +142,12 @@ class Speech2Text:
             token_type = asr_train_args.token_type
         if bpemodel is None:
             bpemodel = asr_train_args.bpemodel
-        if bpe_type is None:
-            bpe_type = asr_train_args.bpe_type
-
         if token_type is None:
             tokenizer = None
         elif token_type == "bpe":
             if bpemodel is not None:
                 tokenizer = build_tokenizer(
-                    token_type=token_type, bpemodel=bpemodel, bpe_type=bpe_type
+                    token_type=token_type, bpemodel=bpemodel
                 )
             else:
                 tokenizer = None
@@ -359,7 +355,6 @@ def inference(
     word_lm_file: Optional[str],
     token_type: Optional[str],
     bpemodel: Optional[str],
-    bpe_type: Optional[str],
     allow_variable_data_keys: bool,
     g2p: Optional[str],
     unk_symbol: Optional[str],
@@ -409,7 +404,6 @@ def inference(
             lm_file=lm_file,
             token_type=token_type,
             bpemodel=bpemodel,
-            bpe_type=bpe_type,
             g2p_type=g2p,
             unk_symbol=unk_symbol,
             g2p_lexicon_path=g2p_lexicon_path,
@@ -600,12 +594,6 @@ def get_parser():
         default=None,
         help="The model path of sentencepiece. "
         "If not given, refers from the training args",
-    )
-    group.add_argument(
-        "--bpe_type",
-        type=str_or_none,
-        default=None,
-        help="The bpemodel type [sentencepiece or yttm]",
     )
     group.add_argument(
         "--g2p",
