@@ -81,6 +81,38 @@ class G2p_en:
         return phones
 
 
+class Wrapper_LexiconG2p:
+    """On behalf of LexiconG2p.
+
+    LexiconG2p isn't pickalable and it can't be copied to the other processes
+    via multiprocessing module.
+    As a workaround, LexiconG2p is instantiated upon calling this class.
+    """
+    def __init__(
+            self,
+            lexicon: Union[Path, str],
+            no_space: bool = True,
+            space_symbol: str = "<space>",
+            positional: Union[None, str] = None,
+            unk_word: str = "<unk>",
+            unk_phon: str = "<spn>",
+        ):
+
+            self.lexicon = lexicon
+            self.no_space = no_space
+            self.space_symbol = space_symbol
+            self.positional = positional
+            self.unk_word = unk_word
+            self.unk_phon = unk_phon
+            self.g2p = None
+
+    def __call__(self, text: str) -> List[str]:
+        if self.g2p is None:
+            self.g2p = LexiconG2p(self.lexicon, self.no_space, self.space_symbol, self.positional, self.unk_word, self.unk_phon)
+
+        return self.g2p(text)
+
+
 class LexiconG2p:
     """G2p based on user-provided lexicon file."""
 
@@ -224,7 +256,8 @@ class PhonemeTokenizer(AbsTokenizer):
                     f"space_symbol and g2p_lexicon_conf.space_symbol must match:"
                     f" {space_symbol}, {g2p_lexicon_conf['space_symbol']}"
                 )
-            self.g2p = LexiconG2p(g2p_lexicon_path, **g2p_lexicon_conf)
+            #self.g2p = LexiconG2p(g2p_lexicon_path, **g2p_lexicon_conf)
+            self.g2p = Wrapper_LexiconG2p(g2p_lexicon_path, **g2p_lexicon_conf)
         else:
             raise NotImplementedError(f"Not supported: g2p_type={g2p_type}")
 
