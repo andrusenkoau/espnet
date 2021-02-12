@@ -218,7 +218,9 @@ class CTC(torch.nn.Module):
                     import ctc_crf_base
 
                     # It is assumed to be running on a single visible GPU
-                    gpus = torch.IntTensor([0])
+                    #gpus = torch.IntTensor([0])
+                    #print(f'[DEBUG]: th_pred.device is: {th_pred.device}')
+                    gpus = torch.IntTensor([th_pred.device.index])
                     ctc_crf_base.init_env(self.den_lm_path, gpus)
                     logging.info("den_lm initialized")
                     self.lms_are_set = True
