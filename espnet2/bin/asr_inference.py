@@ -16,8 +16,10 @@ from typeguard import check_return_type
 from typing import List
 
 from espnet.nets.batch_beam_search import BatchBeamSearch
+from espnet.nets.batch_beam_search_online_sim import BatchBeamSearchOnlineSim
 from espnet.nets.beam_search import BeamSearch
 from espnet.nets.beam_search import Hypothesis
+from espnet.nets.pytorch_backend.transformer.subsampling import TooShortUttError
 from espnet.nets.scorer_interface import BatchScorerInterface
 from espnet.nets.scorers.ctc import CTCPrefixScorer
 from espnet.nets.scorers.length_bonus import LengthBonus
@@ -72,6 +74,7 @@ class Speech2Text:
         lm_weight: float = 1.0,
         penalty: float = 0.0,
         nbest: int = 1,
+        streaming: bool = False,
     ):
         assert check_argument_types()
 
@@ -123,8 +126,13 @@ class Speech2Text:
                 if not isinstance(v, BatchScorerInterface)
             ]
             if len(non_batch) == 0:
-                beam_search.__class__ = BatchBeamSearch
-                logging.info("BatchBeamSearch implementation is selected.")
+                if streaming:
+                    beam_search.__class__ = BatchBeamSearchOnlineSim
+                    beam_search.set_streaming_config(asr_train_config)
+                    logging.info("BatchBeamSearchOnlineSim implementation is selected.")
+                else:
+                    beam_search.__class__ = BatchBeamSearch
+                    logging.info("BatchBeamSearch implementation is selected.")
             else:
                 logging.warning(
                     f"As non-batch scorers {non_batch} are found, "
@@ -356,6 +364,7 @@ def inference(
     token_type: Optional[str],
     bpemodel: Optional[str],
     allow_variable_data_keys: bool,
+    streaming: bool,
     g2p: Optional[str],
     unk_symbol: Optional[str],
     g2p_lexicon_path: Optional[Union[Path, str]],
@@ -417,6 +426,7 @@ def inference(
             lm_weight=lm_weight,
             penalty=penalty,
             nbest=nbest,
+            streaming=streaming,
         )
     else:
         raise ValueError(f"Wrong target_type: {target_type}")
@@ -446,7 +456,11 @@ def inference(
                 _bs = len(next(iter(batch.values())))
                 assert len(keys) == _bs, f"{len(keys)} != {_bs}"
 
-                results = speech2target(**batch)
+                try:
+                    results = speech2target(**batch)
+                except TooShortUttError as e:
+                    logging.warning(f"Utterance {keys} {e}")
+                    results = torch.empty(len(keys), 0)
                 assert len(keys) == len(results), f"{len(keys)} != {len(results)}"
 
                 for key, result in zip(keys, results):
@@ -463,7 +477,12 @@ def inference(
                 }
 
                 # N-best list of (text, token, token_int, hyp_object)
-                results = speech2target(**batch)
+                try:
+                    results = speech2target(**batch)
+                except TooShortUttError as e:
+                    logging.warning(f"Utterance {keys} {e}")
+                    hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
+                    results = [[" ", ["<space>"], [2], hyp]] * nbest
 
                 # Only supporting batch_size==1
                 key = keys[0]
@@ -578,6 +597,7 @@ def get_parser():
         help="CTC weight in joint decoding",
     )
     group.add_argument("--lm_weight", type=float, default=1.0, help="RNNLM weight")
+    group.add_argument("--streaming", type=str2bool, default=False)
 
     group = parser.add_argument_group("Text converter related")
     group.add_argument(

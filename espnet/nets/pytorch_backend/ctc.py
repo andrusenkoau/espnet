@@ -45,13 +45,17 @@ class CTC(torch.nn.Module):
             import warpctc_pytorch as warp_ctc
 
             self.ctc_loss = warp_ctc.CTCLoss(size_average=True, reduce=reduce)
+        elif self.ctc_type == "gtnctc":
+            from espnet.nets.pytorch_backend.gtn_ctc import GTNCTCLossFunction
+
+            self.ctc_loss = GTNCTCLossFunction.apply
         elif self.ctc_type == "ctc-crf":
             from espnet.nets.pytorch_backend.ctc_crf import CTC_CRF_LOSS
 
             self.ctc_loss = CTC_CRF_LOSS(size_average=True, lamb=lamb)
         else:
             raise ValueError(
-                'ctc_type must be "builtin", "warpctc", or "ctc-crf": {}'.format(
+                'ctc_type must be "builtin", "warpctc", "gtnctc", or "ctc-crf": {}'.format(
                     self.ctc_type
                 )
             )
@@ -71,6 +75,10 @@ class CTC(torch.nn.Module):
             return loss
         elif self.ctc_type == "warpctc":
             return self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
+        elif self.ctc_type == "gtnctc":
+            targets = [t.tolist() for t in th_target]
+            log_probs = torch.nn.functional.log_softmax(th_pred, dim=2)
+            return self.ctc_loss(log_probs, targets, 0, "none")
         elif self.ctc_type == "ctc-crf":
             th_pred = th_pred.log_softmax(2)
             return self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
@@ -115,16 +123,19 @@ class CTC(torch.nn.Module):
         # get ctc loss
         dtype = ys_hat.dtype
         # expected shape of seqLength x batchSize x alphabet_size
-        # except for ctc-crf
-        if self.ctc_type != "ctc-crf":
+        # except for ctc-crf and gtnctc
+        if self.ctc_type not in ("ctc-crf", "gtnctc"):
             ys_hat = ys_hat.transpose(0, 1)
-        if self.ctc_type != "builtin" or dtype == torch.float16:
+        if self.ctc_type == "warpctc" or dtype == torch.float16:
             # warpctc only supports float32
             # torch.ctc does not support float16 (#1751)
             ys_hat = ys_hat.to(dtype=torch.float32)
         if self.ctc_type == "builtin":
             # use GPU when using the cuDNN implementation
             ys_true = to_device(hs_pad, ys_true)
+        if self.ctc_type == "gtnctc":
+            # keep as list for gtn
+            ys_true = ys
         self.loss = to_device(hs_pad, self.loss_fn(ys_hat, ys_true, hlens, olens)).to(
             dtype=dtype
         )

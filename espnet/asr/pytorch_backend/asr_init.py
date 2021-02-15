@@ -155,7 +155,7 @@ def filter_modules(model_state_dict, modules):
     return new_mods
 
 
-def load_trained_model(model_path, strict=True):
+def load_trained_model(model_path, training=True, strict=True):
     """Load the trained model for recognition.
 
     Args:
@@ -179,8 +179,11 @@ def load_trained_model(model_path, strict=True):
         train_args.ctc_type = "builtin"
 
     model_class = dynamic_import(model_module)
-    model = model_class(idim, odim, train_args)
 
+    if "transducer" in model_module:
+        model = model_class(idim, odim, train_args, training)
+    else:
+        model = model_class(idim, odim, train_args)
     torch_load(model_path, model, strict=strict)
 
     return model, train_args
