@@ -33,9 +33,13 @@ class SentencepiecesTokenizer(AbsTokenizer):
     def text2tokens(self, line: str) -> List[str]:
         self._build_sentence_piece_processor()
         if self.bpe_alpha == 0.0:
-            return self.sp.SampleEncodeAsPieces(line, nbest_size=1, alpha=self.bpe_alpha)
+            return self.sp.SampleEncodeAsPieces(
+                line, nbest_size=1, alpha=self.bpe_alpha
+            )
         else:
-            return self.sp.SampleEncodeAsPieces(line, nbest_size=-1, alpha=self.bpe_alpha)
+            return self.sp.SampleEncodeAsPieces(
+                line, nbest_size=-1, alpha=self.bpe_alpha
+            )
 
     def tokens2text(self, tokens: Iterable[str]) -> str:
         self._build_sentence_piece_processor()

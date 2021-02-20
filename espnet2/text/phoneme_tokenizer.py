@@ -116,27 +116,35 @@ class Wrapper_LexiconG2p:
     via multiprocessing module.
     As a workaround, LexiconG2p is instantiated upon calling this class.
     """
-    def __init__(
-            self,
-            lexicon: Union[Path, str],
-            no_space: bool = True,
-            space_symbol: str = "<space>",
-            positional: Union[None, str] = None,
-            unk_word: str = "<unk>",
-            unk_phon: str = "<spn>",
-        ):
 
-            self.lexicon = lexicon
-            self.no_space = no_space
-            self.space_symbol = space_symbol
-            self.positional = positional
-            self.unk_word = unk_word
-            self.unk_phon = unk_phon
-            self.g2p = None
+    def __init__(
+        self,
+        lexicon: Union[Path, str],
+        no_space: bool = True,
+        space_symbol: str = "<space>",
+        positional: Union[None, str] = None,
+        unk_word: str = "<unk>",
+        unk_phon: str = "<spn>",
+    ):
+
+        self.lexicon = lexicon
+        self.no_space = no_space
+        self.space_symbol = space_symbol
+        self.positional = positional
+        self.unk_word = unk_word
+        self.unk_phon = unk_phon
+        self.g2p = None
 
     def __call__(self, text: str) -> List[str]:
         if self.g2p is None:
-            self.g2p = LexiconG2p(self.lexicon, self.no_space, self.space_symbol, self.positional, self.unk_word, self.unk_phon)
+            self.g2p = LexiconG2p(
+                self.lexicon,
+                self.no_space,
+                self.space_symbol,
+                self.positional,
+                self.unk_word,
+                self.unk_phon,
+            )
 
         return self.g2p(text)
 

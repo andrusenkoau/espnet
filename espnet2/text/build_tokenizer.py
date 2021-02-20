@@ -12,7 +12,6 @@ from espnet2.text.sentencepiece_tokenizer import SentencepiecesTokenizer
 from espnet2.text.word_tokenizer import WordTokenizer
 
 
-
 def build_tokenizer(
     token_type: str,
     bpemodel: Union[Path, str, Iterable[str]] = None,
@@ -37,7 +36,6 @@ def build_tokenizer(
             )
 
         return SentencepiecesTokenizer(bpemodel, bpe_alpha)
-
 
     elif token_type == "word":
         if remove_non_linguistic_symbols and non_linguistic_symbols is not None:

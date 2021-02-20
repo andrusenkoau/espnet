@@ -267,6 +267,7 @@ class ASRTask(AbsTask):
             action=NestedDictAction,
             default=get_default_kwargs(LexiconG2p),
             help="The keyword arguments for LexiconG2p class.",
+        )
         parser.add_argument(
             "--speech_volume_normalize",
             type=float_or_none,
