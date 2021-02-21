@@ -152,7 +152,7 @@ class Wrapper_LexiconG2p:
 class LexiconG2p:
     """G2p based on user-provided lexicon file."""
 
-    begin_positional_mark = "‗"
+    begin_positional_mark = "▁"
     full_positional_begin_mark = "_B"
     full_positional_end_mark = "_E"
     full_positional_inner_mark = "_I"
