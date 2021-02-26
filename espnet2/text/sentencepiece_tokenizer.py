@@ -37,8 +37,15 @@ class SentencepiecesTokenizer(AbsTokenizer):
                 line, nbest_size=1, alpha=self.bpe_alpha
             )
         else:
-            return self.sp.SampleEncodeAsPieces(
-                line, nbest_size=-1, alpha=self.bpe_alpha
+            # Do not allow to separate "▁" piece
+            return (
+                " ".join(
+                    self.sp.SampleEncodeAsPieces(
+                        line, nbest_size=-1, alpha=self.bpe_alpha
+                    )
+                )
+                .replace("▁ ", "▁")
+                .split()
             )
 
     def tokens2text(self, tokens: Iterable[str]) -> str:
