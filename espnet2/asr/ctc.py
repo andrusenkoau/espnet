@@ -34,8 +34,8 @@ class CTC(torch.nn.Module):
         ignore_nan_grad: bool = False,
         lamb: float = 0.1,
         ctc_crf_eager_mode: bool = False,
-        focal: bool = False,
-        focal_gamma: float = 2.0,
+        focal_gamma: float = 0.0,
+        entropy_beta: float = 0.0,
     ):
         assert check_argument_types()
         assert (
@@ -52,8 +52,8 @@ class CTC(torch.nn.Module):
         self.token_lm_path = token_lm_path
         self.ctc_crf_eager_mode = ctc_crf_eager_mode
         self.lms_are_set = False
-        self.focal = focal
         self.focal_gamma = focal_gamma
+        self.entropy_beta = entropy_beta
 
         if self.ctc_type == "builtin":
             self.ctc_loss = torch.nn.CTCLoss(reduction="none")
@@ -177,13 +177,6 @@ class CTC(torch.nn.Module):
                     )
             else:
                 size = th_pred.size(1)
-
-            # if self.reduce:
-            # Batch-size average
-            # loss = loss.sum() / size
-            # else:
-            # loss = loss / size
-            # return loss
         elif self.ctc_type == "warpctc":
             # warpctc only supports float32
             th_pred = th_pred.to(dtype=torch.float32)
@@ -193,12 +186,6 @@ class CTC(torch.nn.Module):
             th_ilen = th_ilen.cpu().int()
             th_olen = th_olen.cpu().int()
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
-            # if self.reduce:
-            # NOTE: sum() is needed to keep consistency since warpctc
-            # return as tensor w/ shape (1,)
-            # but builtin return as tensor w/o shape (scalar).
-            # loss = loss.sum()
-            # return loss
         elif self.ctc_type == "ctc-crf":
             # runtime den_lm initialization check
             if not self.lms_are_set:
@@ -233,15 +220,27 @@ class CTC(torch.nn.Module):
             if not self.ctc_crf_eager_mode:
                 loss_const = self._compute_path_weight(th_target, th_olen)
                 loss -= loss_const
-            # return loss
         else:
             raise NotImplementedError
+
+        # Perform the maximum entropy regularization
+        # Check more detils in Liu et al, 2018, "Connectionist Temporal Classification
+        #                               with Maximum Entropy Regularization"
+        # Note that this option is simpler and more aggressive
+        # than proposed by Liu et al
+        if self.entropy_beta != 0.0:
+            if self.ctc_type == "warpctc":
+                th_pred = th_pred.log_softmax(2)
+            # Restore source loss values but keep gradients
+            loss_source = loss.detach()
+            loss = (1 - self.entropy_beta) * loss + self.entropy_beta * ((th_pred.exp() * th_pred).sum(2).sum(0))
+            loss += loss_source - loss.detach()
 
         # Compute focal CTC loss
         # Check more detils in Feng et al, 2019, "Focal CTC Loss for Chinese Optical
         #                               Character Recognition on Unbalanced Datasets"
-        if self.focal:
-            # Restore source loss values but change gradients
+        if self.focal_gamma != 0.0:
+            # Restore source loss values but keep gradients
             loss_source = loss.detach()
             loss = self._compute_focal_loss(loss, th_ilen)
             loss += loss_source - loss.detach()

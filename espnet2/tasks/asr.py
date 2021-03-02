@@ -229,7 +229,14 @@ class ASRTask(AbsTask):
             "--bpe_alpha",
             type=float,
             default=0.0,
-            help="(smoothing parameter for unigram [0.0, inf]) or (bpe dropout probability for bpe [0.0, 1.0])",
+            help="(Smoothing parameter for unigram [0.0, inf])"
+            " or (BPE dropout probability for bpe [0.0, 1.0])",
+        )
+        group.add_argument(
+            "--replace_position_mark",
+            type=str_or_none,
+            default=None,
+            help="Replace Sentencepieces position mark '▁' with a user-defined string",
         )
         group.add_argument(
             "--unk_symbol",
@@ -333,6 +340,7 @@ class ASRTask(AbsTask):
                 token_list=args.token_list,
                 bpemodel=args.bpemodel,
                 bpe_alpha=args.bpe_alpha,
+                replace_position_mark=args.replace_position_mark,
                 non_linguistic_symbols=args.non_linguistic_symbols,
                 text_cleaner=args.cleaner,
                 g2p_type=args.g2p,

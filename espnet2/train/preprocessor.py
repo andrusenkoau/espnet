@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Collection
 from typing import Dict
 from typing import Iterable
+from typing import Optional
 from typing import Union
 
 import numpy as np
@@ -133,6 +134,7 @@ class CommonPreprocessor(AbsPreprocessor):
         token_list: Union[Path, str, Iterable[str]] = None,
         bpemodel: Union[Path, str, Iterable[str]] = None,
         bpe_alpha: float = 0.0,
+        replace_position_mark: Optional[str] = None,
         text_cleaner: Collection[str] = None,
         g2p_type: str = None,
         unk_symbol: str = "<unk>",
@@ -167,6 +169,7 @@ class CommonPreprocessor(AbsPreprocessor):
                 token_type=token_type,
                 bpemodel=bpemodel,
                 bpe_alpha=bpe_alpha,
+                replace_position_mark=replace_position_mark,
                 delimiter=delimiter,
                 space_symbol=space_symbol,
                 non_linguistic_symbols=non_linguistic_symbols,

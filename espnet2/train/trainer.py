@@ -447,6 +447,9 @@ class Trainer:
                 if not isinstance(grad_norm, torch.Tensor):
                     grad_norm = torch.tensor(grad_norm)
 
+                # Register grad_norm
+                reporter.register({"grad_norm": grad_norm})
+
                 if not torch.isfinite(grad_norm):
                     logging.warning(
                         f"The grad norm is {grad_norm}. Skipping updating the model."

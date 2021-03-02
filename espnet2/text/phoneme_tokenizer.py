@@ -180,7 +180,7 @@ class LexiconG2p:
         assert check_argument_types()
         if positional is not None and positional != "begin" and positional != "full":
             raise ValueError(
-                f"positional must be one of None, begin, or begin: {positional}"
+                f"positional must be one of None, begin, or full: {positional}"
             )
         self.no_space = no_space
         self.space_symbol = space_symbol
@@ -211,19 +211,19 @@ class LexiconG2p:
     def encode(self, text: str) -> List[str]:
         # encode words with the first available transcription
         words = text.rstrip().split()
-        trans = []
+        trans = [] if self.no_space else [self.space_symbol]
         for word in words:
             trans += self.g2p[word][0]
             if not self.no_space:
                 trans.append(self.space_symbol)
-        return trans if self.no_space else trans[:-1]
+        return trans
 
     def decode(self, tokens: Iterable[str]) -> str:
         # decode transcriptions with the first available word
         if self.no_space and self.positional is None or len(tokens) == 0:
             return "".join(tokens)
         word_tran = []
-        if not self.no_space or tokens[0] != self.space_symbol:
+        if self.no_space or tokens[0] != self.space_symbol:
             word_tran.append(self._apply_mark_strip(tokens[0]))
         word_trans = [word_tran]
         if self.no_space:

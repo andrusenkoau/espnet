@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict
 from typing import Iterable
+from typing import Optional
 from typing import Union
 
 from typeguard import check_argument_types
@@ -23,6 +24,7 @@ def build_tokenizer(
     g2p_lexicon_path: Union[Path, str] = None,
     g2p_lexicon_conf: Dict = None,
     bpe_alpha: float = 0.0,
+    replace_position_mark: Optional[str] = None,
 ) -> AbsTokenizer:
     """A helper function to instantiate Tokenizer"""
     assert check_argument_types()
@@ -35,7 +37,7 @@ def build_tokenizer(
                 "remove_non_linguistic_symbols is not implemented for token_type=bpe"
             )
 
-        return SentencepiecesTokenizer(bpemodel, bpe_alpha)
+        return SentencepiecesTokenizer(bpemodel, bpe_alpha, replace_position_mark)
 
     elif token_type == "word":
         if remove_non_linguistic_symbols and non_linguistic_symbols is not None:
