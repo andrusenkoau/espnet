@@ -9,6 +9,7 @@ import torch
 from typeguard import check_argument_types
 
 from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import chunk_attention_mask
 from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
 from espnet.nets.pytorch_backend.transformer.embedding import (
     EmbedAdapter,  # noqa: H301
@@ -76,6 +77,10 @@ class TransformerEncoder(AbsEncoder):
         positionwise_layer_type: str = "linear",
         positionwise_conv_kernel_size: int = 1,
         padding_idx: int = -1,
+        use_chunk=False,
+        chunk_window=None,
+        chunk_left_context=None,
+        chunk_right_context=None,
     ):
         assert check_argument_types()
         super().__init__()
@@ -148,6 +153,12 @@ class TransformerEncoder(AbsEncoder):
         if self.normalize_before:
             self.after_norm = LayerNorm(output_size)
 
+        # chunk attention attributes:
+        self.use_chunk = use_chunk
+        self.chunk_window = chunk_window
+        self.chunk_left_context = chunk_left_context
+        self.chunk_right_context = chunk_right_context
+
     def output_size(self) -> int:
         return self._output_size
 
@@ -166,7 +177,23 @@ class TransformerEncoder(AbsEncoder):
         Returns:
             position embedded tensor and mask
         """
+
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
+
+        # chunk-attention part
+        if self.use_chunk:
+            batch_size = xs_pad.shape[0]
+            seq_len = xs_pad.shape[1]
+            encoder_mask = chunk_attention_mask(
+                seq_len,
+                self.chunk_window,
+                chunk_left_context=self.chunk_left_context,
+                chunk_right_context=self.chunk_right_context,
+            )
+            encoder_masks = encoder_mask.expand(batch_size, -1, -1).to(xs_pad.device)
+
+            initial_masks = masks[:, :, :-2:2][:, :, :-2:2]
+            masks = encoder_masks & masks & masks.transpose(1, 2)
 
         if (
             isinstance(self.embed, Conv2dSubsampling)
@@ -184,11 +211,15 @@ class TransformerEncoder(AbsEncoder):
         xs_pad, masks = self.embed(xs_pad, masks)
 
         xs_pad, masks = self.encoders(xs_pad, masks)
+
         if self.normalize_before:
             xs_pad = self.after_norm(xs_pad)
 
         if masks is not None:
-            olens = masks.squeeze(1).sum(1)
+            if self.use_chunk:
+                olens = initial_masks.squeeze(1).sum(1)
+            else:
+                olens = masks.squeeze(1).sum(1)
         else:
             olens = None
         return xs_pad, olens, None
