@@ -195,9 +195,6 @@ class TransformerEncoder(AbsEncoder):
             initial_masks = masks[:, :, :-2:2][:, :, :-2:2]
             masks = encoder_masks & masks & masks.transpose(1, 2)
 
-            #print("[DEBUG]: chunk attention is used..")
-            #print(f"[DEBUG]: masks.shape is {masks.shape}")
-
         if (
             isinstance(self.embed, Conv2dSubsampling)
             or isinstance(self.embed, Conv2dSubsampling6)
@@ -213,16 +210,7 @@ class TransformerEncoder(AbsEncoder):
                 )
         xs_pad, masks = self.embed(xs_pad, masks)
 
-        #print("[DEBUG]: After subsampling..")
-        #print(f"[DEBUG]: xs.pad.shape is {xs_pad.shape}")
-        #print(f"[DEBUG]: masks.shape is {masks.shape}")
-        #print(f"[DEBUG]: masks is {masks}")
-
         xs_pad, masks = self.encoders(xs_pad, masks)
-
-        #print("[DEBUG]: After encoding..")
-        #print(f"[DEBUG]: xs.pad.shape is {xs_pad.shape}")
-        #print(f"[DEBUG]: masks.shape is {masks.shape}")
 
         if self.normalize_before:
             xs_pad = self.after_norm(xs_pad)
