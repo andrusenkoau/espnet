@@ -111,6 +111,7 @@ class ConformerEncoder(AbsEncoder):
         else:
             raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
 
+        self.min_subsampling_length = 1
         if input_layer == "linear":
             self.embed = EmbedAdapter(
                 torch.nn.Linear(input_size, output_size),
@@ -125,6 +126,7 @@ class ConformerEncoder(AbsEncoder):
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
+            self.min_subsampling_length = 7
         elif input_layer == "conv2d6":
             self.embed = Conv2dSubsampling6(
                 input_size,
@@ -132,6 +134,7 @@ class ConformerEncoder(AbsEncoder):
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
+            self.min_subsampling_length = 11
         elif input_layer == "conv2d8":
             self.embed = Conv2dSubsampling8(
                 input_size,
@@ -139,6 +142,7 @@ class ConformerEncoder(AbsEncoder):
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
+            self.min_subsampling_length = 15
         elif input_layer == "embed":
             self.embed = EmbedAdapter(
                 torch.nn.Embedding(input_size, output_size, padding_idx=padding_idx),
@@ -244,19 +248,14 @@ class ConformerEncoder(AbsEncoder):
         """
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
 
-        if (
-            isinstance(self.embed, Conv2dSubsampling)
-            or isinstance(self.embed, Conv2dSubsampling6)
-            or isinstance(self.embed, Conv2dSubsampling8)
-        ):
-            short_status, limit_size = check_short_utt(self.embed, xs_pad.size(1))
-            if short_status:
-                raise TooShortUttError(
-                    f"has {xs_pad.size(1)} frames and is too short for subsampling "
-                    + f"(it needs more than {limit_size} frames), return empty results",
-                    xs_pad.size(1),
-                    limit_size,
-                )
+        if xs_pad.size(1) < self.min_subsampling_length:
+            raise TooShortUttError(
+                f"has {xs_pad.size(1)} frames and is too short for subsampling "
+                + f"(it needs more than {self.min_subsampling_length} frames), "
+                + f"return empty results",
+                xs_pad.size(1),
+                self.min_subsampling_length,
+            )
         xs_pad, masks = self.embed(xs_pad, masks)
 
         if isinstance(xs_pad, tuple):

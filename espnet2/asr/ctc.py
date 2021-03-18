@@ -233,7 +233,9 @@ class CTC(torch.nn.Module):
                 th_pred = th_pred.log_softmax(2)
             # Restore source loss values but keep gradients
             loss_source = loss.detach()
-            loss = (1 - self.entropy_beta) * loss + self.entropy_beta * ((th_pred.exp() * th_pred).sum(2).sum(0))
+            loss = (1 - self.entropy_beta) * loss + self.entropy_beta * (
+                (th_pred.exp() * th_pred).sum(2).sum(0)
+            )
             loss += loss_source - loss.detach()
 
         # Compute focal CTC loss

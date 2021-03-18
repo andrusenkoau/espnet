@@ -45,7 +45,7 @@ class MultiSequentialArg2(torch.nn.Sequential):
 
 
 class MultiSequentialArg3(torch.nn.Sequential):
-    """2-input 2-output torch.nn.Sequential."""
+    """3-input 3-output torch.nn.Sequential."""
 
     def forward(self, input1, input2, input3):
         """Repeat."""
@@ -55,7 +55,7 @@ class MultiSequentialArg3(torch.nn.Sequential):
 
 
 class MultiSequentialArg4(torch.nn.Sequential):
-    """2-input 2-output torch.nn.Sequential."""
+    """4-input 4-output torch.nn.Sequential."""
 
     def forward(self, input1, input2, input3, input4):
         """Repeat."""
