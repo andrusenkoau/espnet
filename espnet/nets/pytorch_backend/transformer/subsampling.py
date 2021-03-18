@@ -44,23 +44,26 @@ class Conv2dSubsampling(torch.nn.Module):
 
     Args:
         idim (int): Input dimension.
+        filters_num (int): Number of Conv2d output filters.
         odim (int): Output dimension.
         dropout_rate (float): Dropout rate.
         pos_enc (torch.nn.Module): Custom position encoding layer.
 
     """
 
-    def __init__(self, idim, odim, dropout_rate, pos_enc=None):
+    def __init__(self, idim, filters_num, odim, dropout_rate, pos_enc=None):
         """Construct an Conv2dSubsampling object."""
         super(Conv2dSubsampling, self).__init__()
+        if not filters_num:
+            filters_num = odim
         self.conv = torch.nn.Sequential(
-            torch.nn.Conv2d(1, odim, 3, 2),
+            torch.nn.Conv2d(1, filters_num, 3, 2),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(odim, odim, 3, 2),
+            torch.nn.Conv2d(filters_num, filters_num, 3, 2),
             torch.nn.ReLU(),
         )
         self.out = torch.nn.Sequential(
-            torch.nn.Linear(odim * (((idim - 1) // 2 - 1) // 2), odim),
+            torch.nn.Linear(filters_num * (((idim - 1) // 2 - 1) // 2), odim),
             pos_enc if pos_enc is not None else PositionalEncoding(odim, dropout_rate),
         )
 
@@ -84,6 +87,8 @@ class Conv2dSubsampling(torch.nn.Module):
         x = self.out(x.transpose(1, 2).contiguous().view(b, t, c * f))
         if x_mask is None:
             return x, None
+        if x_mask.shape[1] > 1:
+            x_masks = x_mask[:, :-2:2, :][:, :-2:2, :]
         return x, x_mask[:, :, :-2:2][:, :, :-2:2]
 
     def __getitem__(self, key):

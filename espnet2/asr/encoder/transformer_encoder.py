@@ -71,6 +71,7 @@ class TransformerEncoder(AbsEncoder):
         positional_dropout_rate: float = 0.1,
         attention_dropout_rate: float = 0.0,
         input_layer: Optional[str] = "conv2d",
+        conv_filters: int = 0,
         pos_enc_class=PositionalEncoding,
         normalize_before: bool = True,
         concat_after: bool = False,
@@ -96,7 +97,7 @@ class TransformerEncoder(AbsEncoder):
                 pos_enc_class(output_size, positional_dropout_rate),
             )
         elif input_layer == "conv2d":
-            self.embed = Conv2dSubsampling(input_size, output_size, dropout_rate)
+            self.embed = Conv2dSubsampling(input_size, conv_filters, output_size, dropout_rate)
             self.min_subsampling_length = 7
         elif input_layer == "conv2d6":
             self.embed = Conv2dSubsampling6(input_size, output_size, dropout_rate)
