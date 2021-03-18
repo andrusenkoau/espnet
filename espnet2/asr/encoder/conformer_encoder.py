@@ -84,6 +84,7 @@ class ConformerEncoder(AbsEncoder):
         positional_dropout_rate: float = 0.1,
         attention_dropout_rate: float = 0.0,
         input_layer: str = "conv2d",
+        conv_filters: int = 0,
         normalize_before: bool = True,
         concat_after: bool = False,
         positionwise_layer_type: str = "linear",
@@ -122,6 +123,7 @@ class ConformerEncoder(AbsEncoder):
         elif input_layer == "conv2d":
             self.embed = Conv2dSubsampling(
                 input_size,
+                conv_filters,
                 output_size,
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
