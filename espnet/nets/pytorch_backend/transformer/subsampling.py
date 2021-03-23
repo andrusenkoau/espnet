@@ -114,17 +114,19 @@ class Conv2dSubsampling6(torch.nn.Module):
 
     """
 
-    def __init__(self, idim, odim, dropout_rate, pos_enc=None):
+    def __init__(self, idim, filters_num, odim, dropout_rate, pos_enc=None):
         """Construct an Conv2dSubsampling6 object."""
         super(Conv2dSubsampling6, self).__init__()
+        if not filters_num:
+            filters_num = odim
         self.conv = torch.nn.Sequential(
-            torch.nn.Conv2d(1, odim, 3, 2),
+            torch.nn.Conv2d(1, filters_num, 3, 2),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(odim, odim, 5, 3),
+            torch.nn.Conv2d(filters_num, filters_num, 5, 3),
             torch.nn.ReLU(),
         )
         self.out = torch.nn.Sequential(
-            torch.nn.Linear(odim * (((idim - 1) // 2 - 2) // 3), odim),
+            torch.nn.Linear(filters_num * (((idim - 1) // 2 - 2) // 3), odim),
             pos_enc if pos_enc is not None else PositionalEncoding(odim, dropout_rate),
         )
 
@@ -162,19 +164,21 @@ class Conv2dSubsampling8(torch.nn.Module):
 
     """
 
-    def __init__(self, idim, odim, dropout_rate, pos_enc=None):
+    def __init__(self, idim, filters_num, odim, dropout_rate, pos_enc=None):
         """Construct an Conv2dSubsampling8 object."""
         super(Conv2dSubsampling8, self).__init__()
+        if not filters_num:
+            filters_num = odim
         self.conv = torch.nn.Sequential(
-            torch.nn.Conv2d(1, odim, 3, 2),
+            torch.nn.Conv2d(1, filters_num, 3, 2),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(odim, odim, 3, 2),
+            torch.nn.Conv2d(filters_num, filters_num, 3, 2),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(odim, odim, 3, 2),
+            torch.nn.Conv2d(filters_num, filters_num, 3, 2),
             torch.nn.ReLU(),
         )
         self.out = torch.nn.Sequential(
-            torch.nn.Linear(odim * ((((idim - 1) // 2 - 1) // 2 - 1) // 2), odim),
+            torch.nn.Linear(filters_num * ((((idim - 1) // 2 - 1) // 2 - 1) // 2), odim),
             pos_enc if pos_enc is not None else PositionalEncoding(odim, dropout_rate),
         )
 

@@ -100,10 +100,10 @@ class TransformerEncoder(AbsEncoder):
             self.embed = Conv2dSubsampling(input_size, conv_filters, output_size, dropout_rate)
             self.min_subsampling_length = 7
         elif input_layer == "conv2d6":
-            self.embed = Conv2dSubsampling6(input_size, output_size, dropout_rate)
+            self.embed = Conv2dSubsampling6(input_size, conv_filters, output_size, dropout_rate)
             self.min_subsampling_length = 11
         elif input_layer == "conv2d8":
-            self.embed = Conv2dSubsampling8(input_size, output_size, dropout_rate)
+            self.embed = Conv2dSubsampling8(input_size, conv_filters, output_size, dropout_rate)
             self.min_subsampling_length = 15
         elif input_layer == "embed":
             self.embed = EmbedAdapter(
