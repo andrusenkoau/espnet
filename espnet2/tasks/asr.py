@@ -31,6 +31,7 @@ from espnet2.asr.encoder.conformer_encoder import ConformerEncoder
 from espnet2.asr.encoder.rnn_encoder import RNNEncoder
 from espnet2.asr.encoder.transformer_encoder import TransformerEncoder
 from espnet2.asr.encoder.conv_transformer_encoder import ConvTransformerEncoder
+from espnet2.asr.encoder.conv_conformer_encoder import ConvConformerEncoder
 from espnet2.asr.encoder.contextual_block_transformer_encoder import (
     ContextualBlockTransformerEncoder,  # noqa: H301
 )
@@ -97,6 +98,7 @@ encoder_choices = ClassChoices(
     "encoder",
     classes=dict(
         conformer=ConformerEncoder,
+        conv_conformer=ConvConformerEncoder,
         transformer=TransformerEncoder,
         conv_transformer=ConvTransformerEncoder,
         contextual_block_transformer=ContextualBlockTransformerEncoder,
