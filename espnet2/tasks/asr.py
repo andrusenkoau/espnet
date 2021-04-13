@@ -35,6 +35,7 @@ from espnet2.asr.encoder.contextual_block_transformer_encoder import (
 )
 from espnet2.asr.encoder.vgg_rnn_encoder import VGGRNNEncoder
 from espnet2.asr.encoder.wav2vec2_encoder import FairSeqWav2Vec2Encoder
+from espnet2.asr.encoder.wav2vec2_transformer_encoder import FairSeqWav2Vec2TransformerEncoder
 from espnet2.asr.espnet_model import ESPnetASRModel
 from espnet2.asr.frontend.abs_frontend import AbsFrontend
 from espnet2.asr.frontend.default import DefaultFrontend
@@ -101,6 +102,7 @@ encoder_choices = ClassChoices(
         vgg_rnn=VGGRNNEncoder,
         rnn=RNNEncoder,
         wav2vec2=FairSeqWav2Vec2Encoder,
+        wav2vec2_transformer=FairSeqWav2Vec2TransformerEncoder,
     ),
     type_check=AbsEncoder,
     default="rnn",
