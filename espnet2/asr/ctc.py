@@ -88,11 +88,7 @@ class CTC(torch.nn.Module):
                     " Expect negative and less representative loss values."
                 )
 
-            if ignore_nan_grad:
-                raise NotImplementedError(
-                    "ignore_nan_grad option is not supported for ctc-crf"
-                )
-            self.ctc_loss = CTC_CRF_LOSS(size_average=False, reduce=False, lamb=lamb)
+            self.ctc_loss = CTC_CRF_LOSS(size_average=False, reduce=False, lamb=lamb, ignore_nan_grad=ignore_nan_grad)
         else:
             raise NotImplementedError
 
