@@ -15,6 +15,7 @@ from espnet.nets.pytorch_backend.conformer.convolution import ConvolutionModule
 from espnet.nets.pytorch_backend.conformer.encoder_layer import EncoderLayer
 from espnet.nets.pytorch_backend.nets_utils import get_activation
 from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import chunk_attention_mask
 from espnet.nets.pytorch_backend.transformer.attention import (
     MultiHeadedAttention,  # noqa: H301
     RelPositionMultiHeadedAttention,  # noqa: H301
@@ -92,6 +93,7 @@ class ConformerEncoder(AbsEncoder):
         positional_dropout_rate: float = 0.1,
         attention_dropout_rate: float = 0.0,
         input_layer: str = "conv2d",
+        conv_filters: int = 0,
         normalize_before: bool = True,
         concat_after: bool = False,
         positionwise_layer_type: str = "linear",
@@ -105,6 +107,10 @@ class ConformerEncoder(AbsEncoder):
         zero_triu: bool = False,
         cnn_module_kernel: int = 31,
         padding_idx: int = -1,
+        use_chunk=False,
+        chunk_window: int = 0,
+        chunk_left_context: int = 0,
+        chunk_right_context: int = 0,
     ):
         assert check_argument_types()
         super().__init__()
@@ -149,6 +155,7 @@ class ConformerEncoder(AbsEncoder):
         elif input_layer == "conv2d":
             self.embed = Conv2dSubsampling(
                 input_size,
+                conv_filters,
                 output_size,
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
@@ -157,6 +164,7 @@ class ConformerEncoder(AbsEncoder):
         elif input_layer == "conv2d6":
             self.embed = Conv2dSubsampling6(
                 input_size,
+                conv_filters,
                 output_size,
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
@@ -165,6 +173,7 @@ class ConformerEncoder(AbsEncoder):
         elif input_layer == "conv2d8":
             self.embed = Conv2dSubsampling8(
                 input_size,
+                conv_filters,
                 output_size,
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
@@ -263,6 +272,12 @@ class ConformerEncoder(AbsEncoder):
         if self.normalize_before:
             self.after_norm = LayerNorm(output_size)
 
+        # chunk attention attributes:
+        self.use_chunk = use_chunk
+        self.chunk_window = chunk_window
+        self.chunk_left_context = chunk_left_context
+        self.chunk_right_context = chunk_right_context
+
     def output_size(self) -> int:
         return self._output_size
 
@@ -287,6 +302,23 @@ class ConformerEncoder(AbsEncoder):
         """
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
 
+        # chunk-attention part
+        if self.use_chunk and self.chunk_left_context > 0:
+            batch_size = xs_pad.shape[0]
+            seq_len = xs_pad.shape[1]
+            encoder_mask = chunk_attention_mask(
+                seq_len,
+                self.chunk_window,
+                chunk_left_context=self.chunk_left_context,
+                chunk_right_context=self.chunk_right_context,
+            )
+            encoder_masks = encoder_mask.expand(batch_size, -1, -1).to(xs_pad.device)
+
+            initial_masks = masks[:, :, :-2:2][:, :, :-2:2]
+            masks = encoder_masks & masks & masks.transpose(1, 2)
+        else:
+            initial_masks = masks
+
         if xs_pad.size(1) < self.min_subsampling_length:
             raise TooShortUttError(
                 f"has {xs_pad.size(1)} frames and is too short for subsampling "
@@ -308,7 +340,10 @@ class ConformerEncoder(AbsEncoder):
             xs_pad = self.after_norm(xs_pad)
 
         if masks is not None:
-            olens = masks.squeeze(1).sum(1)
+            if self.use_chunk:
+                olens = initial_masks.squeeze(1).sum(1)
+            else:
+                olens = masks.squeeze(1).sum(1)
         else:
             olens = None
         return xs_pad, olens, None
