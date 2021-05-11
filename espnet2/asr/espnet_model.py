@@ -76,7 +76,10 @@ class ESPnetASRModel(AbsESPnetModel):
         self.normalize = normalize
         self.preencoder = preencoder
         self.encoder = encoder
-        self.decoder = decoder
+        if ctc_weight == 1.0:
+            self.decoder = None
+        else:
+            self.decoder = decoder
         if ctc_weight == 0.0:
             self.ctc = None
         else:
