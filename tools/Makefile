@@ -3,8 +3,8 @@
 CHAINER_VERSION := 6.0.0
 # Disable cupy installation
 NO_CUPY :=
-# PyTorch version: 0.4.1, 1.0.0, 1.0.1, 1.1.0, 1.2.0, 1.3.0, 1.3.1, 1.4.0, 1.5.0, 1.5.1, 1.6.0, 1.7.0, 1.7.1, 1.8.0, 1.8.1
-TH_VERSION := 1.4.0
+# PyTorch version: 1.3.1, 1.4.0, 1.5.1, 1.6.0, 1.7.1, 1.8.1, and 1.9.0 are tested.
+TH_VERSION := 1.9.0
 WGET := wget --tries=3
 
 # Use pip for pytorch installation even if you have anaconda
@@ -221,6 +221,10 @@ beamformit.done:
 fairseq.done: espnet.done
 	. ./activate_python.sh && ./installers/install_fairseq.sh
 	touch fairseq.done
+
+s3prl.done: espnet.done
+	. ./activate_python.sh && ./installers/install_s3prl.sh
+	touch s3prl.done
 
 check_install: python
 	. ./activate_python.sh; . ./extra_path.sh; python3 check_install.py
