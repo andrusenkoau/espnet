@@ -31,7 +31,7 @@ class CTC(torch.nn.Module):
         dropout_rate: float = 0.0,
         ctc_type: str = "builtin",
         reduce: bool = True,
-        ignore_nan_grad: bool = False,
+        ignore_nan_grad: bool = True,
         lamb: float = 0.1,
         ctc_crf_eager_mode: bool = False,
         focal_gamma: float = 0.0,
@@ -61,9 +61,7 @@ class CTC(torch.nn.Module):
             import warpctc_pytorch as warp_ctc
 
             if ignore_nan_grad:
-                raise NotImplementedError(
-                    "ignore_nan_grad option is not supported for warp_ctc"
-                )
+                logging.warning("ignore_nan_grad option is not supported for warp_ctc")
             self.ctc_loss = warp_ctc.CTCLoss(size_average=False, reduce=False)
         elif self.ctc_type == "ctc-crf":
             from espnet2.asr.ctc_crf import CTC_CRF_LOSS

@@ -25,6 +25,7 @@ from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
 from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.pytorch_backend.transformer.subsampling import check_short_utt
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
+from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling2
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling6
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling8
 from espnet.nets.pytorch_backend.transformer.subsampling import TooShortUttError
@@ -99,6 +100,9 @@ class TransformerEncoder(AbsEncoder):
         elif input_layer == "conv2d":
             self.embed = Conv2dSubsampling(input_size, conv_filters, output_size, dropout_rate)
             self.min_subsampling_length = 7
+        elif input_layer == "conv2d2":
+            self.embed = Conv2dSubsampling2(input_size, output_size, dropout_rate)
+            self.min_subsampling_length = 3
         elif input_layer == "conv2d6":
             self.embed = Conv2dSubsampling6(input_size, output_size, dropout_rate)
             self.min_subsampling_length = 11
