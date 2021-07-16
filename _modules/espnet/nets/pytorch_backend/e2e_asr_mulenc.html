@@ -1,23 +1,31 @@
 
 
 <!DOCTYPE html>
-<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
-<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
-  <title>espnet.nets.pytorch_backend.e2e_asr_mulenc &mdash; ESPnet 0.7.0 documentation</title>
+  <title>espnet.nets.pytorch_backend.e2e_asr_mulenc &mdash; ESPnet 0.10.0 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+
+  
   
 
   
   
-  
+
   
 
   
-  <script type="text/javascript" src="../../../../_static/js/modernizr.min.js"></script>
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
   
     
       <script type="text/javascript" id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
@@ -32,10 +40,6 @@
     <script type="text/javascript" src="../../../../_static/js/theme.js"></script>
 
     
-
-  
-  <link rel="stylesheet" href="../../../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" /> 
 </head>
@@ -61,7 +65,7 @@
             
             
               <div class="version">
-                0.7.0
+                0.10.0
               </div>
             
           
@@ -78,6 +82,7 @@
           
         </div>
 
+        
         <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
           
             
@@ -101,47 +106,43 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../espnet2_task.html">Task class and data input system for training</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../espnet2_distributed.html">Distributed training</a></li>
 </ul>
-<p class="caption"><span class="caption-text">Notebook:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../../notebook/asr_cli.html">Speech Recognition (Recipe)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../notebook/asr_library.html">Speech Recognition (Library)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../notebook/tts_cli.html">Text-to-Speech (Recipe)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../notebook/pretrained.html">Pretrained Model</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../notebook/tts_realtime_demo.html">ESPnet real time E2E-TTS demonstration</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../notebook/st_demo.html">ESPnet Speech Translation Demonstration</a></li>
-</ul>
 <p class="caption"><span class="caption-text">Package Reference:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.st.html">espnet.st package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.lm.html">espnet.lm package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.tts.html">espnet.tts package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.transform.html">espnet.transform package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.bin.html">espnet.bin package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.scheduler.html">espnet.scheduler package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.utils.html">espnet.utils package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.optimizer.html">espnet.optimizer package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.nets.html">espnet.nets package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.mt.html">espnet.mt package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.scheduler.html">espnet.scheduler package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.optimizer.html">espnet.optimizer package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.vc.html">espnet.vc package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.utils.html">espnet.utils package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.lm.html">espnet.lm package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.asr.html">espnet.asr package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.tasks.html">espnet2.tasks package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.bin.html">espnet.bin package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.transform.html">espnet.transform package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.st.html">espnet.st package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.mt.html">espnet.mt package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet.tts.html">espnet.tts package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.fileio.html">espnet2.fileio package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.iterators.html">espnet2.iterators package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.text.html">espnet2.text package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.optimizers.html">espnet2.optimizers package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.torch_utils.html">espnet2.torch_utils package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.iterators.html">espnet2.iterators package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.lm.html">espnet2.lm package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.tts.html">espnet2.tts package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.bin.html">espnet2.bin package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.layers.html">espnet2.layers package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.schedulers.html">espnet2.schedulers package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.utils.html">espnet2.utils package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.main_funcs.html">espnet2.main_funcs package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.asr.html">espnet2.asr package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.samplers.html">espnet2.samplers package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.utils.html">espnet2.utils package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.schedulers.html">espnet2.schedulers package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.lm.html">espnet2.lm package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.asr.html">espnet2.asr package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.torch_utils.html">espnet2.torch_utils package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.main_funcs.html">espnet2.main_funcs package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.enh.html">espnet2.enh package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.bin.html">espnet2.bin package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.train.html">espnet2.train package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.tasks.html">espnet2.tasks package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.tts.html">espnet2.tts package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../_gen/espnet2.diar.html">espnet2.diar package</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Tool Reference:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../../apis/espnet_bin.html">core tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../apis/espnet2_bin.html">core tools (espnet2)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../apis/utils_py.html">python utility tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../apis/utils_sh.html">bash utility tools</a></li>
 </ul>
@@ -149,6 +150,7 @@
             
           
         </div>
+        
       </div>
     </nav>
 
@@ -183,11 +185,13 @@
 
 
 
+
+
 <div role="navigation" aria-label="breadcrumbs navigation">
 
   <ul class="wy-breadcrumbs">
     
-      <li><a href="../../../../index.html">Docs</a> &raquo;</li>
+      <li><a href="../../../../index.html" class="icon icon-home"></a> &raquo;</li>
         
           <li><a href="../../../index.html">Module code</a> &raquo;</li>
         
@@ -207,13 +211,11 @@
            <div itemprop="articleBody">
             
   <h1>Source code for espnet.nets.pytorch_backend.e2e_asr_mulenc</h1><div class="highlight"><pre>
-<span></span><span class="ch">#!/usr/bin/env python3</span>
-
-<span class="sd">&quot;&quot;&quot;Define e2e module for multi-encoder network. https://arxiv.org/pdf/1811.04903.pdf.&quot;&quot;&quot;</span>
-<span class="c1"># Copyright 2017 Johns Hopkins University (Shinji Watanabe)</span>
+<span></span><span class="c1"># Copyright 2017 Johns Hopkins University (Shinji Watanabe)</span>
 <span class="c1"># Copyright 2017 Johns Hopkins University (Ruizhi Li)</span>
 <span class="c1">#  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)</span>
 
+<span class="sd">&quot;&quot;&quot;Define e2e module for multi-encoder network. https://arxiv.org/pdf/1811.04903.pdf.&quot;&quot;&quot;</span>
 
 <span class="kn">import</span> <span class="nn">argparse</span>
 <span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">groupby</span>
@@ -236,6 +238,7 @@
 <span class="kn">from</span> <span class="nn">espnet.nets.pytorch_backend.nets_utils</span> <span class="kn">import</span> <span class="n">to_torch_tensor</span>
 <span class="kn">from</span> <span class="nn">espnet.nets.pytorch_backend.rnn.attentions</span> <span class="kn">import</span> <span class="n">att_for</span>
 <span class="kn">from</span> <span class="nn">espnet.nets.pytorch_backend.rnn.decoders</span> <span class="kn">import</span> <span class="n">decoder_for</span>
+<span class="kn">from</span> <span class="nn">espnet.nets.pytorch_backend.rnn.encoders</span> <span class="kn">import</span> <span class="n">Encoder</span>
 <span class="kn">from</span> <span class="nn">espnet.nets.pytorch_backend.rnn.encoders</span> <span class="kn">import</span> <span class="n">encoder_for</span>
 <span class="kn">from</span> <span class="nn">espnet.nets.scorers.ctc</span> <span class="kn">import</span> <span class="n">CTCPrefixScorer</span>
 <span class="kn">from</span> <span class="nn">espnet.utils.cli_utils</span> <span class="kn">import</span> <span class="n">strtobool</span>
@@ -520,6 +523,17 @@
             <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ctc weight assigned to each encoder during decoding.&quot;</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="n">parser</span></div>
+
+<div class="viewcode-block" id="E2E.get_total_subsampling_factor"><a class="viewcode-back" href="../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.e2e_asr_mulenc.E2E.get_total_subsampling_factor">[docs]</a>    <span class="k">def</span> <span class="nf">get_total_subsampling_factor</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get total subsampling factor.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">enc</span><span class="p">,</span> <span class="n">Encoder</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">enc</span><span class="o">.</span><span class="n">conv_subsampling_factor</span> <span class="o">*</span> <span class="nb">int</span><span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">subsample_list</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">enc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">conv_subsampling_factor</span> <span class="o">*</span> <span class="nb">int</span><span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">subsample_list</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="p">)</span></div>
 
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idims</span><span class="p">,</span> <span class="n">odim</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Initialize this class with python-level args.</span>
@@ -1033,6 +1047,7 @@
 <span class="sd">            3) other case =&gt; attention weights (B, Lmax, Tmax).</span>
 <span class="sd">        :rtype: float ndarray or list</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="c1"># 1. Encoder</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">replace_sos</span><span class="p">:</span>
@@ -1051,28 +1066,63 @@
             <span class="n">att_ws</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dec</span><span class="o">.</span><span class="n">calculate_all_attentions</span><span class="p">(</span>
                 <span class="n">hs_pad_list</span><span class="p">,</span> <span class="n">hlens_list</span><span class="p">,</span> <span class="n">ys_pad</span><span class="p">,</span> <span class="n">lang_ids</span><span class="o">=</span><span class="n">tgt_lang_ids</span>
             <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">att_ws</span></div>
 
-        <span class="k">return</span> <span class="n">att_ws</span></div></div>
+<div class="viewcode-block" id="E2E.calculate_all_ctc_probs"><a class="viewcode-back" href="../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.e2e_asr_mulenc.E2E.calculate_all_ctc_probs">[docs]</a>    <span class="k">def</span> <span class="nf">calculate_all_ctc_probs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">xs_pad_list</span><span class="p">,</span> <span class="n">ilens_list</span><span class="p">,</span> <span class="n">ys_pad</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;E2E CTC probability calculation.</span>
+
+<span class="sd">        :param List xs_pad_list: list of batch (torch.Tensor) of padded input sequences</span>
+<span class="sd">                                [(B, Tmax_1, idim), (B, Tmax_2, idim),..]</span>
+<span class="sd">        :param List ilens_list:</span>
+<span class="sd">            list of batch (torch.Tensor) of lengths of input sequences [(B), (B), ..]</span>
+<span class="sd">        :param torch.Tensor ys_pad:</span>
+<span class="sd">            batch of padded character id sequence tensor (B, Lmax)</span>
+<span class="sd">        :return: CTC probability (B, Tmax, vocab)</span>
+<span class="sd">        :rtype: float ndarray or list</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">probs_list</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mtlalpha</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">probs_list</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+        <span class="n">probs_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="c1"># 1. Encoder</span>
+            <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_encs</span><span class="p">):</span>
+                <span class="n">hs_pad</span><span class="p">,</span> <span class="n">hlens</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">enc</span><span class="p">[</span><span class="n">idx</span><span class="p">](</span><span class="n">xs_pad_list</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="n">ilens_list</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+
+                <span class="c1"># 2. CTC loss</span>
+                <span class="n">ctc_idx</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">share_ctc</span> <span class="k">else</span> <span class="n">idx</span>
+                <span class="n">probs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctc</span><span class="p">[</span><span class="n">ctc_idx</span><span class="p">]</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">hs_pad</span><span class="p">)</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+                <span class="n">probs_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">probs_list</span></div></div>
 </pre></div>
 
            </div>
            
           </div>
           <footer>
-  
 
   <hr/>
 
   <div role="contentinfo">
     <p>
-        &copy; Copyright 2017, Shinji Watanabe
+        &#169; Copyright 2017, Shinji Watanabe.
 
     </p>
   </div>
-  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
 
 </footer>
-
         </div>
       </div>
 
@@ -1080,7 +1130,6 @@
 
   </div>
   
-
 
   <script type="text/javascript">
       jQuery(function () {
