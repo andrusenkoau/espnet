@@ -209,12 +209,14 @@ class E2E(ASRInterface, torch.nn.Module):
         for i in six.moves.range(len(self.dec.decoder)):
             set_forget_bias_to_one(self.dec.decoder[i].bias_ih)
 
-    def forward(self, xs_pad, ilens, ys_pad):
+    def forward(self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None):
         """E2E forward.
 
         :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax, idim)
         :param torch.Tensor ilens: batch of lengths of input sequences (B)
         :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: loss value
         :rtype: torch.Tensor
         """
@@ -336,6 +338,10 @@ class E2E(ASRInterface, torch.nn.Module):
             loss_ctc_data = float(self.loss_ctc)
 
         loss_data = float(self.loss)
+        if ctc_crf_path_weights:
+            path_weight = np.mean([float(i) for i in ctc_crf_path_weights[0]])
+            loss_ctc_data -= path_weight
+            loss_data -= alpha * path_weight
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
             self.reporter.report(
                 loss_ctc_data, loss_att_data, acc, cer_ctc, cer, wer, loss_data
@@ -375,6 +381,32 @@ class E2E(ASRInterface, torch.nn.Module):
         # 1. encoder
         hs, _, _ = self.enc(hs, hlens)
         return hs.squeeze(0)
+
+    def encode_batch(self, xs):
+        """Encode acoustic features.
+
+        :param list xs: list of input acoustic feature arrays [(T_1, D), (T_2, D), ...]
+        :return: batch of encoder outputs (B, Tmax, hdim)
+        :rtype: torch.Tensor
+        """
+        self.eval()
+        ilens = np.fromiter((xx.shape[0] for xx in xs), dtype=np.int64)
+
+        # subsample frame
+        xs = [xx[:: self.subsample[0], :] for xx in xs]
+        xs = [to_device(self, to_torch_tensor(xx).float()) for xx in xs]
+        xs_pad = pad_list(xs, 0.0)
+
+        # 0. Frontend
+        if self.frontend is not None:
+            enhanced, hlens, mask = self.frontend(xs_pad, ilens)
+            hs_pad, hlens = self.feature_transform(enhanced, hlens)
+        else:
+            hs_pad, hlens = xs_pad, ilens
+
+        # 1. Encoder
+        hs_pad, hlens, _ = self.enc(hs_pad, hlens)
+        return hs_pad, hlens
 
     def recognize(self, x, recog_args, char_list, rnnlm=None):
         """E2E beam search.
@@ -473,12 +505,16 @@ class E2E(ASRInterface, torch.nn.Module):
             self.train()
         return enhanced.cpu().numpy(), mask.cpu().numpy(), ilens
 
-    def calculate_all_attentions(self, xs_pad, ilens, ys_pad):
+    def calculate_all_attentions(
+        self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None
+    ):
         """E2E attention calculation.
 
         :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax, idim)
         :param torch.Tensor ilens: batch of lengths of input sequences (B)
         :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: attention weights with the following shape,
             1) multi-head case => attention weights (B, H, Lmax, Tmax),
             2) other case => attention weights (B, Lmax, Tmax).
@@ -501,12 +537,14 @@ class E2E(ASRInterface, torch.nn.Module):
         self.train()
         return att_ws
 
-    def calculate_all_ctc_probs(self, xs_pad, ilens, ys_pad):
+    def calculate_all_ctc_probs(self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None):
         """E2E CTC probability calculation.
 
         :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax)
         :param torch.Tensor ilens: batch of lengths of input sequences (B)
         :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: CTC probability (B, Tmax, vocab)
         :rtype: float ndarray
         """

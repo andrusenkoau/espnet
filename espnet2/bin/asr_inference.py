@@ -3,6 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
+from typing import Dict
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -23,14 +24,17 @@ from espnet.nets.scorer_interface import BatchScorerInterface
 from espnet.nets.scorers.ctc import CTCPrefixScorer
 from espnet.nets.scorers.length_bonus import LengthBonus
 from espnet.utils.cli_utils import get_commandline_args
+from espnet2.fileio.ark_scp import ArkScpWriter
 from espnet2.fileio.datadir_writer import DatadirWriter
 from espnet2.tasks.asr import ASRTask
 from espnet2.tasks.lm import LMTask
 from espnet2.text.build_tokenizer import build_tokenizer
+from espnet2.text.phoneme_tokenizer import LexiconG2p
 from espnet2.text.token_id_converter import TokenIDConverter
 from espnet2.torch_utils.device_funcs import to_device
 from espnet2.torch_utils.set_all_random_seed import set_all_random_seed
 from espnet2.utils import config_argparse
+from espnet2.utils.nested_dict_action import NestedDictAction
 from espnet2.utils.types import str2bool
 from espnet2.utils.types import str2triple_str
 from espnet2.utils.types import str_or_none
@@ -41,9 +45,9 @@ class Speech2Text:
 
     Examples:
         >>> import soundfile
-        >>> speech2text = Speech2Text("asr_config.yml", "asr.pth")
+        >>> speech2target = Speech2Text("asr_config.yml", "asr.pth")
         >>> audio, rate = soundfile.read("speech.wav")
-        >>> speech2text(audio)
+        >>> speech2target(audio)
         [(text, token, token_int, hypothesis object), ...]
 
     """
@@ -56,6 +60,10 @@ class Speech2Text:
         lm_file: Union[Path, str] = None,
         token_type: str = None,
         bpemodel: str = None,
+        g2p_type: str = None,
+        unk_symbol: str = None,
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
         device: str = "cpu",
         maxlenratio: float = 0.0,
         minlenratio: float = 0.0,
@@ -142,7 +150,6 @@ class Speech2Text:
             token_type = asr_train_args.token_type
         if bpemodel is None:
             bpemodel = asr_train_args.bpemodel
-
         if token_type is None:
             tokenizer = None
         elif token_type == "bpe":
@@ -150,9 +157,26 @@ class Speech2Text:
                 tokenizer = build_tokenizer(token_type=token_type, bpemodel=bpemodel)
             else:
                 tokenizer = None
+        elif token_type == "phn":
+            if g2p_type is None:
+                g2p_type = asr_train_args.g2p
+            if g2p_type == "g2p_lexicon":
+                if g2p_lexicon_path is None:
+                    g2p_lexicon_path = asr_train_args.g2p_lexicon_path
+                if g2p_lexicon_conf is None:
+                    g2p_lexicon_conf = asr_train_args.g2p_lexicon_conf
+            tokenizer = build_tokenizer(
+                token_type=token_type,
+                g2p_type=g2p_type,
+                g2p_lexicon_path=g2p_lexicon_path,
+                g2p_lexicon_conf=g2p_lexicon_conf,
+            )
         else:
             tokenizer = build_tokenizer(token_type=token_type)
-        converter = TokenIDConverter(token_list=token_list)
+
+        if unk_symbol is None:
+            unk_symbol = asr_train_args.unk_symbol
+        converter = TokenIDConverter(token_list=token_list, unk_symbol=unk_symbol)
         logging.info(f"Text tokenizer: {tokenizer}")
 
         self.asr_model = asr_model
@@ -226,8 +250,94 @@ class Speech2Text:
         return results
 
 
+class Speech2Logits:
+    """Speech2Logits class
+
+    Simplified version of Speech2Text to produce only ctc logits.
+
+    Examples:
+        >>> import soundfile
+        >>> speech2target = Speech2Logits("asr_config.yml", "asr.pth")
+        >>> audio, rate = soundfile.read("speech.wav")
+        >>> speech2target([audio])
+        [logit tensor, ]
+
+    """
+
+    def __init__(
+        self,
+        asr_train_config: Union[Path, str],
+        asr_model_file: Union[Path, str] = None,
+        token_type: str = None,
+        bpemodel: str = None,
+        device: str = "cpu",
+        maxlenratio: float = 0.0,
+        minlenratio: float = 0.0,
+        batch_size: int = 1,
+        dtype: str = "float32",
+    ):
+        assert check_argument_types()
+
+        # 1. Build ASR model
+        asr_model, asr_train_args = ASRTask.build_model_from_file(
+            asr_train_config, asr_model_file, device
+        )
+        asr_model.to(dtype=getattr(torch, dtype)).eval()
+
+        self.ctc = asr_model.ctc
+        self.ctc.to(device=device, dtype=getattr(torch, dtype)).eval()
+        logging.info(f"CTC: {self.ctc}")
+        logging.info(f"Decoding device={device}, dtype={dtype}")
+
+        self.asr_model = asr_model
+        self.asr_train_args = asr_train_args
+        self.maxlenratio = maxlenratio
+        self.minlenratio = minlenratio
+        self.device = device
+        self.dtype = dtype
+
+    @torch.no_grad()
+    def __call__(
+        self,
+        speech: Union[torch.Tensor, np.ndarray],
+        speech_lengths: Union[torch.Tensor, List[int]],
+    ) -> List[torch.Tensor]:
+        """Inference
+
+        Args:
+            data: Input speech data
+        Returns:
+            logits
+
+        """
+        assert check_argument_types()
+
+        # Input as audio signal
+        if isinstance(speech, np.ndarray):
+            speech = torch.tensor(speech)
+        if isinstance(speech_lengths, list):
+            speech_lengths = torch.LongTensor(speech_lengths)
+
+        speech = speech.to(getattr(torch, self.dtype))
+        batch = {"speech": speech, "speech_lengths": speech_lengths}
+
+        # a. To device
+        batch = to_device(batch, device=self.device)
+
+        # b. Forward Encoder
+        enc, enc_lengths = self.asr_model.encode(**batch)
+        logits = self.ctc.log_softmax(enc)
+
+        results = []
+        for logit, l in zip(logits, enc_lengths):
+            results.append(logit[:l])
+
+        assert check_return_type(results)
+        return results
+
+
 def inference(
-    output_dir: str,
+    output_dir: Union[Path, str],
     maxlenratio: float,
     minlenratio: float,
     batch_size: int,
@@ -253,10 +363,18 @@ def inference(
     bpemodel: Optional[str],
     allow_variable_data_keys: bool,
     streaming: bool,
+    g2p: Optional[str],
+    unk_symbol: Optional[str],
+    g2p_lexicon_path: Optional[Union[Path, str]],
+    g2p_lexicon_conf: Optional[Dict],
+    target_type: str,
 ):
     assert check_argument_types()
-    if batch_size > 1:
-        raise NotImplementedError("batch decoding is not implemented")
+    output_dir = Path(output_dir)
+    if batch_size > 1 and target_type != "logits":
+        raise NotImplementedError(
+            f"batch decoding is not implemented for target_type {target_type}"
+        )
     if word_lm_train_config is not None:
         raise NotImplementedError("Word LM is not implemented")
     if ngpu > 1:
@@ -275,25 +393,41 @@ def inference(
     # 1. Set random-seed
     set_all_random_seed(seed)
 
-    # 2. Build speech2text
-    speech2text = Speech2Text(
-        asr_train_config=asr_train_config,
-        asr_model_file=asr_model_file,
-        lm_train_config=lm_train_config,
-        lm_file=lm_file,
-        token_type=token_type,
-        bpemodel=bpemodel,
-        device=device,
-        maxlenratio=maxlenratio,
-        minlenratio=minlenratio,
-        dtype=dtype,
-        beam_size=beam_size,
-        ctc_weight=ctc_weight,
-        lm_weight=lm_weight,
-        penalty=penalty,
-        nbest=nbest,
-        streaming=streaming,
-    )
+    # 2. Build speech2target
+    if target_type == "logits":
+        speech2target = Speech2Logits(
+            asr_train_config=asr_train_config,
+            asr_model_file=asr_model_file,
+            device=device,
+            maxlenratio=maxlenratio,
+            minlenratio=minlenratio,
+            dtype=dtype,
+        )
+    elif target_type == "text":
+        speech2target = Speech2Text(
+            asr_train_config=asr_train_config,
+            asr_model_file=asr_model_file,
+            lm_train_config=lm_train_config,
+            lm_file=lm_file,
+            token_type=token_type,
+            bpemodel=bpemodel,
+            g2p_type=g2p,
+            unk_symbol=unk_symbol,
+            g2p_lexicon_path=g2p_lexicon_path,
+            g2p_lexicon_conf=g2p_lexicon_conf,
+            device=device,
+            maxlenratio=maxlenratio,
+            minlenratio=minlenratio,
+            dtype=dtype,
+            beam_size=beam_size,
+            ctc_weight=ctc_weight,
+            lm_weight=lm_weight,
+            penalty=penalty,
+            nbest=nbest,
+            streaming=streaming,
+        )
+    else:
+        raise ValueError(f"Wrong target_type: {target_type}")
 
     # 3. Build data-iterator
     loader = ASRTask.build_streaming_iterator(
@@ -302,43 +436,69 @@ def inference(
         batch_size=batch_size,
         key_file=key_file,
         num_workers=num_workers,
-        preprocess_fn=ASRTask.build_preprocess_fn(speech2text.asr_train_args, False),
-        collate_fn=ASRTask.build_collate_fn(speech2text.asr_train_args, False),
+        preprocess_fn=ASRTask.build_preprocess_fn(speech2target.asr_train_args, False),
+        collate_fn=ASRTask.build_collate_fn(speech2target.asr_train_args, False),
         allow_variable_data_keys=allow_variable_data_keys,
         inference=True,
     )
 
     # 7 .Start for-loop
     # FIXME(kamo): The output format should be discussed about
-    with DatadirWriter(output_dir) as writer:
-        for keys, batch in loader:
-            assert isinstance(batch, dict), type(batch)
-            assert all(isinstance(s, str) for s in keys), keys
-            _bs = len(next(iter(batch.values())))
-            assert len(keys) == _bs, f"{len(keys)} != {_bs}"
-            batch = {k: v[0] for k, v in batch.items() if not k.endswith("_lengths")}
+    if target_type == "logits":
+        with ArkScpWriter(
+            output_dir, output_dir / "logits.scp", save_mat=False
+        ) as writer:
+            for keys, batch in loader:
+                assert isinstance(batch, dict), type(batch)
+                assert all(isinstance(s, str) for s in keys), keys
+                _bs = len(next(iter(batch.values())))
+                assert len(keys) == _bs, f"{len(keys)} != {_bs}"
 
-            # N-best list of (text, token, token_int, hyp_object)
-            try:
-                results = speech2text(**batch)
-            except TooShortUttError as e:
-                logging.warning(f"Utterance {keys} {e}")
-                hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
-                results = [[" ", ["<space>"], [2], hyp]] * nbest
+                try:
+                    results = speech2target(**batch)
+                except TooShortUttError as e:
+                    logging.warning(f"Utterance {keys} {e}")
+                    results = torch.empty(len(keys), 0)
+                assert len(keys) == len(results), f"{len(keys)} != {len(results)}"
 
-            # Only supporting batch_size==1
-            key = keys[0]
-            for n, (text, token, token_int, hyp) in zip(range(1, nbest + 1), results):
-                # Create a directory: outdir/{n}best_recog
-                ibest_writer = writer[f"{n}best_recog"]
+                for key, result in zip(keys, results):
+                    writer[key] = result.cpu().data.numpy()
+    elif target_type == "text":
+        with DatadirWriter(output_dir) as writer:
+            for keys, batch in loader:
+                assert isinstance(batch, dict), type(batch)
+                assert all(isinstance(s, str) for s in keys), keys
+                _bs = len(next(iter(batch.values())))
+                assert len(keys) == _bs, f"{len(keys)} != {_bs}"
+                batch = {
+                    k: v[0] for k, v in batch.items() if not k.endswith("_lengths")
+                }
 
-                # Write the result to each file
-                ibest_writer["token"][key] = " ".join(token)
-                ibest_writer["token_int"][key] = " ".join(map(str, token_int))
-                ibest_writer["score"][key] = str(hyp.score)
+                # N-best list of (text, token, token_int, hyp_object)
+                try:
+                    results = speech2target(**batch)
+                except TooShortUttError as e:
+                    logging.warning(f"Utterance {keys} {e}")
+                    hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
+                    results = [[" ", ["<space>"], [2], hyp]] * nbest
 
-                if text is not None:
-                    ibest_writer["text"][key] = text
+                # Only supporting batch_size==1
+                key = keys[0]
+                for n, (text, token, token_int, hyp) in zip(
+                    range(1, nbest + 1), results
+                ):
+                    # Create a directory: outdir/{n}best_recog
+                    ibest_writer = writer[f"{n}best_recog"]
+
+                    # Write the result to each file
+                    ibest_writer["token"][key] = " ".join(token)
+                    ibest_writer["token_int"][key] = " ".join(map(str, token_int))
+                    ibest_writer["score"][key] = str(hyp.score)
+
+                    if text is not None:
+                        ibest_writer["text"][key] = text
+    else:
+        raise ValueError(f"Wrong target_type: {target_type}")
 
 
 def get_parser():
@@ -376,6 +536,13 @@ def get_parser():
         type=int,
         default=1,
         help="The number of workers used for DataLoader",
+    )
+    parser.add_argument(
+        "--target_type",
+        type=str,
+        default="text",
+        choices=["text", "logits"],
+        help="Target type",
     )
 
     group = parser.add_argument_group("Input data related")
@@ -435,7 +602,7 @@ def get_parser():
         "--token_type",
         type=str_or_none,
         default=None,
-        choices=["char", "bpe", None],
+        choices=["char", "bpe", "phn", None],
         help="The token type for ASR model. "
         "If not given, refers from the training args",
     )
@@ -445,6 +612,31 @@ def get_parser():
         default=None,
         help="The model path of sentencepiece. "
         "If not given, refers from the training args",
+    )
+    group.add_argument(
+        "--g2p",
+        type=str_or_none,
+        choices=[None, "g2p_en", "pyopenjtalk", "pyopenjtalk_kana", "g2p_lexicon"],
+        default=None,
+        help="Specify g2p method if --token_type=phn",
+    )
+    group.add_argument(
+        "--unk_symbol",
+        type=str_or_none,
+        default=None,
+        help="Unknown symbol in token_list",
+    )
+    group.add_argument(
+        "--g2p_lexicon_path",
+        type=str_or_none,
+        default=None,
+        help="Lexicon path for lexicon-based g2p",
+    )
+    group.add_argument(
+        "--g2p_lexicon_conf",
+        action=NestedDictAction,
+        default=None,
+        help="The keyword arguments for LexiconG2p class.",
     )
 
     return parser

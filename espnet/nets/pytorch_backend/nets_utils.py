@@ -3,10 +3,60 @@
 """Network related utility tools."""
 
 import logging
-from typing import Dict
+from typing import (
+    Dict,  # noqa: H301
+    Optional,  # noqa: H301
+)
 
 import numpy as np
 import torch
+
+
+def chunk_attention_mask(
+    seq_len: int,
+    chunk_window: int,
+    chunk_left_context: int = 0,
+    chunk_right_context: int = 0,
+):
+    """Make mask tensor containing indices of padded part.
+
+    Args:
+        seq_len (int): Length of sequence.
+        chunk_window (int): Length of chunk window.
+        chunk_left_context (int, optional): Length of left context for chunk
+        chunk_right_context (int, optional): Length of left context for chunk
+
+    Returns:
+        Tensor: Mask tensor containing indices of padded part.
+                dtype=torch.uint8 in PyTorch 1.2-
+                dtype=torch.bool in PyTorch 1.2+ (including 1.2)
+
+    """
+    seq_range = torch.arange(0, seq_len, dtype=torch.int64)
+    seq_range_expand = seq_range.unsqueeze(0).unsqueeze(0).expand(1, seq_len, seq_len)
+    chunk_range = torch.tensor(
+        (
+            (seq_range // chunk_window) * chunk_window
+            + (chunk_window - 1)
+            + chunk_right_context
+        )
+    )
+    chunk_range_expand_right = (
+        chunk_range.unsqueeze(0).unsqueeze(-1).expand(1, seq_len, 1)
+    )
+    mask_right = seq_range_expand <= chunk_range_expand_right
+
+    chunk_range_left = (
+        chunk_range - chunk_window - chunk_right_context - chunk_left_context
+    )
+    chunk_range_expand_left = (
+        chunk_range_left.unsqueeze(0).unsqueeze(-1).expand(1, seq_len, 1)
+    )
+    mask_left = seq_range_expand > chunk_range_expand_left
+
+    mask = mask_right & mask_left
+
+    return mask
 
 
 def to_device(m, x):
@@ -61,7 +111,7 @@ def pad_list(xs, pad_value):
     return pad
 
 
-def make_pad_mask(lengths, xs=None, length_dim=-1):
+def make_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = -1):
     """Make mask tensor containing indices of padded part.
 
     Args:
@@ -150,33 +200,40 @@ def make_pad_mask(lengths, xs=None, length_dim=-1):
     if length_dim == 0:
         raise ValueError("length_dim cannot be 0: {}".format(length_dim))
 
-    if not isinstance(lengths, list):
-        lengths = lengths.tolist()
-    bs = int(len(lengths))
+    if isinstance(lengths, torch.Tensor):
+        lengths = lengths.clone().detach().cpu()
+    elif isinstance(lengths, list):
+        lengths = torch.Tensor(lengths).to(dtype=torch.int64)
+    else:
+        raise NotImplementedError
+    bs = lengths.size(0)
     if xs is None:
-        maxlen = int(max(lengths))
+        maxlen = int(lengths.max())
     else:
         maxlen = xs.size(length_dim)
 
     seq_range = torch.arange(0, maxlen, dtype=torch.int64)
     seq_range_expand = seq_range.unsqueeze(0).expand(bs, maxlen)
-    seq_length_expand = seq_range_expand.new(lengths).unsqueeze(-1)
-    mask = seq_range_expand >= seq_length_expand
+    mask = seq_range_expand >= lengths.unsqueeze(-1)
 
     if xs is not None:
         assert xs.size(0) == bs, (xs.size(0), bs)
 
         if length_dim < 0:
             length_dim = xs.dim() + length_dim
-        # ind = (:, None, ..., None, :, , None, ..., None)
-        ind = tuple(
-            slice(None) if i in (0, length_dim) else None for i in range(xs.dim())
-        )
-        mask = mask[ind].expand_as(xs).to(xs.device)
+        ind = [0] * xs.dim()
+        for i in range(xs.dim()):
+            if i == 0:
+                ind[i] = bs
+            elif i == length_dim:
+                ind[i] = maxlen
+            else:
+                ind[i] = 1
+        mask = mask.view(ind).expand_as(xs).to(xs.device)
     return mask
 
 
-def make_non_pad_mask(lengths, xs=None, length_dim=-1):
+def make_non_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = -1):
     """Make mask tensor containing indices of non-padded part.
 
     Args:

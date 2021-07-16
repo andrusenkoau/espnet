@@ -663,7 +663,18 @@ class AbsTask(ABC):
             default=None,
             help="If not given, the value of --batch_bins is used",
         )
-
+        group.add_argument(
+            "--batch_bins_scale",
+            type=float,
+            default=0,
+            help="The scale of batch bins sequence lenghts. Disabled if 0.",
+        )
+        group.add_argument(
+            "--no_shuffle",
+            type=str2bool,
+            default=False,
+            help="Do not shuffle batches in training",
+        )
         group.add_argument("--train_shape_file", type=str, action="append", default=[])
         group.add_argument("--valid_shape_file", type=str, action="append", default=[])
 
@@ -1483,6 +1494,7 @@ class AbsTask(ABC):
             if iter_options.distributed
             else 1,
             utt2category_file=utt2category_file,
+            batch_bins_scale=args.batch_bins_scale,
         )
 
         batches = list(batch_sampler)
@@ -1514,7 +1526,7 @@ class AbsTask(ABC):
             batches=batches,
             seed=args.seed,
             num_iters_per_epoch=iter_options.num_iters_per_epoch,
-            shuffle=iter_options.train,
+            shuffle=iter_options.train and not args.no_shuffle,
             num_workers=args.num_workers,
             collate_fn=iter_options.collate_fn,
             pin_memory=args.ngpu > 0,
@@ -1583,7 +1595,7 @@ class AbsTask(ABC):
             # --num_iters_per_epoch doesn't indicate the number of iterations,
             # but indicates the number of samples.
             num_samples_per_epoch=iter_options.num_iters_per_epoch,
-            shuffle=iter_options.train,
+            shuffle=iter_options.train and not args.no_shuffle,
             num_workers=args.num_workers,
             collate_fn=iter_options.collate_fn,
             pin_memory=args.ngpu > 0,
@@ -1709,7 +1721,9 @@ class AbsTask(ABC):
 
         # 3. Build MultipleIterFactory
         return MultipleIterFactory(
-            build_funcs=build_funcs, shuffle=iter_options.train, seed=args.seed
+            build_funcs=build_funcs,
+            shuffle=iter_options.train and not args.no_shuffle,
+            seed=args.seed,
         )
 
     @classmethod

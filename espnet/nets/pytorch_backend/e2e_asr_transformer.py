@@ -19,7 +19,10 @@ from espnet.nets.pytorch_backend.e2e_asr import CTC_LOSS_THRESHOLD
 from espnet.nets.pytorch_backend.e2e_asr import Reporter
 from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.pytorch_backend.nets_utils import th_accuracy
+from espnet.nets.pytorch_backend.nets_utils import to_device
+from espnet.nets.pytorch_backend.nets_utils import to_torch_tensor
 from espnet.nets.pytorch_backend.rnn.decoders import CTC_SCORING_RATIO
 from espnet.nets.pytorch_backend.transformer.add_sos_eos import add_sos_eos
 from espnet.nets.pytorch_backend.transformer.argument import (
@@ -99,6 +102,11 @@ class E2E(ASRInterface, torch.nn.Module):
             dropout_rate=args.dropout_rate,
             positional_dropout_rate=args.dropout_rate,
             attention_dropout_rate=args.transformer_attn_dropout_rate,
+            use_chunk=args.use_chunk,
+            chunk_window=args.chunk_window,
+            chunk_left_context=args.chunk_left_context,
+            chunk_right_context=args.chunk_right_context,
+            use_checkpointing=args.grad_checkpointing,
         )
         if args.mtlalpha < 1:
             self.decoder = Decoder(
@@ -115,6 +123,7 @@ class E2E(ASRInterface, torch.nn.Module):
                 positional_dropout_rate=args.dropout_rate,
                 self_attention_dropout_rate=args.transformer_attn_dropout_rate,
                 src_attention_dropout_rate=args.transformer_attn_dropout_rate,
+                use_checkpointing=args.grad_checkpointing,
             )
             self.criterion = LabelSmoothingLoss(
                 odim,
@@ -160,12 +169,14 @@ class E2E(ASRInterface, torch.nn.Module):
         # initialize parameters
         initialize(self, args.transformer_init)
 
-    def forward(self, xs_pad, ilens, ys_pad):
+    def forward(self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None):
         """E2E forward.
 
         :param torch.Tensor xs_pad: batch of padded source sequences (B, Tmax, idim)
         :param torch.Tensor ilens: batch of lengths of source sequences (B)
         :param torch.Tensor ys_pad: batch of padded target sequences (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: ctc loss value
         :rtype: torch.Tensor
         :return: attention loss value
@@ -236,6 +247,10 @@ class E2E(ASRInterface, torch.nn.Module):
             loss_ctc_data = float(loss_ctc)
 
         loss_data = float(self.loss)
+        if ctc_crf_path_weights:
+            path_weight = numpy.mean([float(i) for i in ctc_crf_path_weights[0]])
+            loss_ctc_data -= path_weight
+            loss_data -= alpha * path_weight
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
             self.reporter.report(
                 loss_ctc_data, loss_att_data, self.acc, cer_ctc, cer, wer, loss_data
@@ -256,9 +271,30 @@ class E2E(ASRInterface, torch.nn.Module):
         :rtype: torch.Tensor
         """
         self.eval()
-        x = torch.as_tensor(x).unsqueeze(0)
+        x = to_device(self, torch.as_tensor(x).unsqueeze(0))
         enc_output, _ = self.encoder(x, None)
         return enc_output.squeeze(0)
+
+    def encode_batch(self, xs):
+        """Encode acoustic features.
+
+        :param list xs: list of input acoustic feature arrays [(T_1, D), (T_2, D), ...]
+        :return: batch of encoder outputs (B, Tmax, hdim)
+        :rtype: torch.Tensor
+        """
+        self.eval()
+        ilens = numpy.fromiter((xx.shape[0] for xx in xs), dtype=numpy.int64)
+
+        # subsample frame
+        xs = [xx[:: self.subsample[0], :] for xx in xs]
+        xs = [to_device(self, to_torch_tensor(xx).float()) for xx in xs]
+        xs_pad = pad_list(xs, 0.0)
+
+        # encoder
+        src_mask = make_non_pad_mask(ilens.tolist()).to(xs_pad.device).unsqueeze(-2)
+        hs_pad, hs_mask = self.encoder(xs_pad, src_mask)
+        hlens = hs_mask.view(hs_pad.size(0), -1).sum(1)
+        return hs_pad, hlens
 
     def recognize(self, x, recog_args, char_list=None, rnnlm=None, use_jit=False):
         """Recognize input speech.
@@ -292,7 +328,7 @@ class E2E(ASRInterface, torch.nn.Module):
         else:
             lpz = None
 
-        h = enc_output.squeeze(0)
+        h = enc_output.squeeze(0).cpu()
 
         logging.info("input lengths: " + str(h.size(0)))
         # search parms
@@ -319,7 +355,9 @@ class E2E(ASRInterface, torch.nn.Module):
         else:
             hyp = {"score": 0.0, "yseq": [y]}
         if lpz is not None:
-            ctc_prefix_score = CTCPrefixScore(lpz.detach().numpy(), 0, self.eos, numpy)
+            ctc_prefix_score = CTCPrefixScore(
+                lpz.detach().cpu().numpy(), 0, self.eos, numpy
+            )
             hyp["ctc_state_prev"] = ctc_prefix_score.initial_state()
             hyp["ctc_score_prev"] = 0.0
             if ctc_weight != 1.0:
@@ -341,8 +379,8 @@ class E2E(ASRInterface, torch.nn.Module):
                 vy[0] = hyp["yseq"][i]
 
                 # get nbest local scores and their ids
-                ys_mask = subsequent_mask(i + 1).unsqueeze(0)
-                ys = torch.tensor(hyp["yseq"]).unsqueeze(0)
+                ys_mask = to_device(self, subsequent_mask(i + 1).unsqueeze(0))
+                ys = to_device(self, torch.tensor(hyp["yseq"]).unsqueeze(0))
                 # FIXME: jit does not match non-jit result
                 if use_jit:
                     if traced_decoder is None:
@@ -354,6 +392,7 @@ class E2E(ASRInterface, torch.nn.Module):
                     local_att_scores = self.decoder.forward_one_step(
                         ys, ys_mask, enc_output
                     )[0]
+                local_att_scores = local_att_scores.cpu()
 
                 if rnnlm:
                     rnnlm_state, local_lm_scores = rnnlm.predict(hyp["rnnlm_prev"], vy)
@@ -480,18 +519,22 @@ class E2E(ASRInterface, torch.nn.Module):
         )
         return nbest_hyps
 
-    def calculate_all_attentions(self, xs_pad, ilens, ys_pad):
+    def calculate_all_attentions(
+        self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None
+    ):
         """E2E attention calculation.
 
         :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax, idim)
         :param torch.Tensor ilens: batch of lengths of input sequences (B)
         :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: attention weights (B, H, Lmax, Tmax)
         :rtype: float ndarray
         """
         self.eval()
         with torch.no_grad():
-            self.forward(xs_pad, ilens, ys_pad)
+            self.forward(xs_pad, ilens, ys_pad, ctc_crf_path_weights)
         ret = dict()
         for name, m in self.named_modules():
             if (
@@ -506,12 +549,14 @@ class E2E(ASRInterface, torch.nn.Module):
         self.train()
         return ret
 
-    def calculate_all_ctc_probs(self, xs_pad, ilens, ys_pad):
+    def calculate_all_ctc_probs(self, xs_pad, ilens, ys_pad, ctc_crf_path_weights=None):
         """E2E CTC probability calculation.
 
         :param torch.Tensor xs_pad: batch of padded input sequences (B, Tmax)
         :param torch.Tensor ilens: batch of lengths of input sequences (B)
         :param torch.Tensor ys_pad: batch of padded token id sequence tensor (B, Lmax)
+        :param list ctc_crf_path_weights: list of path weights for real ctc-crf loss
+            logging.
         :return: CTC probability (B, Tmax, vocab)
         :rtype: float ndarray
         """
@@ -521,7 +566,7 @@ class E2E(ASRInterface, torch.nn.Module):
 
         self.eval()
         with torch.no_grad():
-            self.forward(xs_pad, ilens, ys_pad)
+            self.forward(xs_pad, ilens, ys_pad, ctc_crf_path_weights)
         for name, m in self.named_modules():
             if isinstance(m, CTC) and m.probs is not None:
                 ret = m.probs.cpu().numpy()

@@ -72,5 +72,10 @@ class E2E(E2ETransformer):
             use_cnn_module=args.use_cnn_module,
             zero_triu=args.zero_triu,
             cnn_module_kernel=args.cnn_module_kernel,
+            use_chunk=args.use_chunk,
+            chunk_window=args.chunk_window,
+            chunk_left_context=args.chunk_left_context,
+            chunk_right_context=args.chunk_right_context,
+            use_checkpointing=args.grad_checkpointing,
         )
         self.reset_parameters(args)

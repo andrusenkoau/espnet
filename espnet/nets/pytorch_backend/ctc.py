@@ -19,9 +19,12 @@ class CTC(torch.nn.Module):
     :param bool reduce: reduce the CTC loss into a scalar
     """
 
-    def __init__(self, odim, eprojs, dropout_rate, ctc_type="warpctc", reduce=True):
+    def __init__(
+        self, odim, eprojs, dropout_rate, ctc_type="warpctc", reduce=True, lamb=0.1
+    ):
         super().__init__()
         self.dropout_rate = dropout_rate
+        self.lamb = lamb
         self.loss = None
         self.ctc_lo = torch.nn.Linear(eprojs, odim)
         self.probs = None  # for visualization
@@ -29,7 +32,8 @@ class CTC(torch.nn.Module):
         # In case of Pytorch >= 1.7.0, CTC will be always builtin
         self.ctc_type = (
             ctc_type
-            if LooseVersion(torch.__version__) < LooseVersion("1.7.0")
+            if ctc_type != "warpctc"
+            or LooseVersion(torch.__version__) < LooseVersion("1.7.0")
             else "builtin"
         )
 
@@ -52,9 +56,15 @@ class CTC(torch.nn.Module):
             from espnet.nets.pytorch_backend.gtn_ctc import GTNCTCLossFunction
 
             self.ctc_loss = GTNCTCLossFunction.apply
+        elif self.ctc_type == "ctc-crf":
+            from espnet.nets.pytorch_backend.ctc_crf import CTC_CRF_LOSS
+
+            self.ctc_loss = CTC_CRF_LOSS(size_average=True, lamb=lamb)
         else:
             raise ValueError(
-                'ctc_type must be "builtin" or "warpctc": {}'.format(self.ctc_type)
+                'ctc_type must be "builtin", "warpctc", "gtnctc", or "ctc-crf": {}'.format(
+                    self.ctc_type
+                )
             )
 
         self.ignore_id = -1
@@ -75,7 +85,10 @@ class CTC(torch.nn.Module):
         elif self.ctc_type == "gtnctc":
             targets = [t.tolist() for t in th_target]
             log_probs = torch.nn.functional.log_softmax(th_pred, dim=2)
-            return self.ctc_loss(log_probs, targets, th_ilen, 0, "none")
+            return self.ctc_loss(log_probs, targets, 0, "none")
+        elif self.ctc_type == "ctc-crf":
+            th_pred = th_pred.log_softmax(2)
+            return self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
         else:
             raise NotImplementedError
 
@@ -94,7 +107,7 @@ class CTC(torch.nn.Module):
 
         # zero padding for hs
         ys_hat = self.ctc_lo(F.dropout(hs_pad, p=self.dropout_rate))
-        if self.ctc_type != "gtnctc":
+        if self.ctc_type not in ("ctc-crf", "gtnctc"):
             ys_hat = ys_hat.transpose(0, 1)
 
         if self.ctc_type == "builtin":
@@ -139,6 +152,28 @@ class CTC(torch.nn.Module):
             + "".join(str(olens).split("\n"))
         )
 
+# <<<<<<< ctc-crf-master
+#         # get ctc loss
+#         dtype = ys_hat.dtype
+#         # expected shape of seqLength x batchSize x alphabet_size
+#         # except for ctc-crf and gtnctc
+#         if self.ctc_type not in ("ctc-crf", "gtnctc"):
+#             ys_hat = ys_hat.transpose(0, 1)
+#         if self.ctc_type == "warpctc" or dtype == torch.float16:
+#             # warpctc only supports float32
+#             # torch.ctc does not support float16 (#1751)
+#             ys_hat = ys_hat.to(dtype=torch.float32)
+#         if self.ctc_type == "builtin":
+#             # use GPU when using the cuDNN implementation
+#             ys_true = to_device(hs_pad, ys_true)
+#         if self.ctc_type == "gtnctc":
+#             # keep as list for gtn
+#             ys_true = ys
+#         self.loss = to_device(hs_pad, self.loss_fn(ys_hat, ys_true, hlens, olens)).to(
+#             dtype=dtype
+#         )
+# =======
+# >>>>>>> master
         if self.reduce:
             # NOTE: sum() is needed to keep consistency
             # since warpctc return as tensor w/ shape (1,)
@@ -250,11 +285,19 @@ def ctc_for(args, odim, reduce=True):
     :param bool reduce : return the CTC loss in a scalar
     :return: the corresponding CTC module
     """
+    ctc_crf_lamb = getattr(
+        args, "ctc_crf_lamb", 0.1
+    )  # use getattr to keep compatibility
     num_encs = getattr(args, "num_encs", 1)  # use getattr to keep compatibility
     if num_encs == 1:
         # compatible with single encoder asr mode
         return CTC(
-            odim, args.eprojs, args.dropout_rate, ctc_type=args.ctc_type, reduce=reduce
+            odim,
+            args.eprojs,
+            args.dropout_rate,
+            ctc_type=args.ctc_type,
+            reduce=reduce,
+            lamb=ctc_crf_lamb,
         )
     elif num_encs >= 1:
         ctcs_list = torch.nn.ModuleList()
@@ -266,6 +309,7 @@ def ctc_for(args, odim, reduce=True):
                 args.dropout_rate[0],
                 ctc_type=args.ctc_type,
                 reduce=reduce,
+                lamb=ctc_crf_lamb,
             )
             ctcs_list.append(ctc)
         else:
@@ -276,6 +320,7 @@ def ctc_for(args, odim, reduce=True):
                     args.dropout_rate[idx],
                     ctc_type=args.ctc_type,
                     reduce=reduce,
+                    lamb=ctc_crf_lamb,
                 )
                 ctcs_list.append(ctc)
         return ctcs_list

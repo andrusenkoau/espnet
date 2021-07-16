@@ -93,6 +93,13 @@ class CustomEncoder(torch.nn.Module):
         else:
             xs = self.embed(xs)
 
+# <<<<<<< ctc-crf-master
+#         xs, masks = (
+#             self.encoders(xs[0], masks, xs[1])
+#             if isinstance(xs, tuple)
+#             else self.encoders(xs, masks)
+#         )[:2]
+# =======
         if self.aux_task_layer_list:
             aux_xs_list = []
 

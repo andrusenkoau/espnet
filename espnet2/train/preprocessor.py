@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Collection
 from typing import Dict
 from typing import Iterable
+from typing import Optional
 from typing import Union
 
 import numpy as np
@@ -130,12 +131,16 @@ class CommonPreprocessor(AbsPreprocessor):
         token_type: str = None,
         token_list: Union[Path, str, Iterable[str]] = None,
         bpemodel: Union[Path, str, Iterable[str]] = None,
+        bpe_alpha: float = 0.0,
+        replace_position_mark: Optional[str] = None,
         text_cleaner: Collection[str] = None,
         g2p_type: str = None,
         unk_symbol: str = "<unk>",
         space_symbol: str = "<space>",
         non_linguistic_symbols: Union[Path, str, Iterable[str]] = None,
         delimiter: str = None,
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
         rir_scp: str = None,
         rir_apply_prob: float = 1.0,
         noise_scp: str = None,
@@ -161,10 +166,14 @@ class CommonPreprocessor(AbsPreprocessor):
             self.tokenizer = build_tokenizer(
                 token_type=token_type,
                 bpemodel=bpemodel,
+                bpe_alpha=bpe_alpha,
+                replace_position_mark=replace_position_mark,
                 delimiter=delimiter,
                 space_symbol=space_symbol,
                 non_linguistic_symbols=non_linguistic_symbols,
                 g2p_type=g2p_type,
+                g2p_lexicon_path=g2p_lexicon_path,
+                g2p_lexicon_conf=g2p_lexicon_conf,
             )
             self.token_id_converter = TokenIDConverter(
                 token_list=token_list,
@@ -325,6 +334,8 @@ class CommonPreprocessor_multi(AbsPreprocessor):
         delimiter: str = None,
         speech_name: str = "speech",
         text_name: list = ["text"],
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
     ):
         super().__init__(train)
         self.train = train
@@ -334,6 +345,15 @@ class CommonPreprocessor_multi(AbsPreprocessor):
         if token_type is not None:
             if token_list is None:
                 raise ValueError("token_list is required if token_type is not None")
+            if (
+                token_type == "g2p_lexicon"
+                and g2p_lexicon_conf is not None
+                and g2p_lexicon_conf.unk_symbol != unk_symbol
+            ):
+                raise ValueError(
+                    f"unk_symbol and g2p_lexicon_conf.unk_symbol must match for "
+                    f"g2p_lexicon token_type: {unk_symbol}, g2p_lexicon_conf.unk_symbol"
+                )
             self.text_cleaner = TextCleaner(text_cleaner)
 
             self.tokenizer = build_tokenizer(
@@ -343,6 +363,8 @@ class CommonPreprocessor_multi(AbsPreprocessor):
                 space_symbol=space_symbol,
                 non_linguistic_symbols=non_linguistic_symbols,
                 g2p_type=g2p_type,
+                g2p_lexicon_path=g2p_lexicon_path,
+                g2p_lexicon_conf=g2p_lexicon_conf,
             )
             self.token_id_converter = TokenIDConverter(
                 token_list=token_list,

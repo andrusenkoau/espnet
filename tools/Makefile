@@ -57,10 +57,10 @@ all: kaldi showenv python conda_packages.done sctk.done sph2pipe.done check_inst
 
 ifneq ($(strip $(CHAINER_VERSION)),)
 python: activate_python.sh espnet.done pytorch.done chainer.done
-extra: warp-ctc.done warp-transducer.done chainer_ctc.done nkf.done moses.done mwerSegmenter.done pesq kenlm.done pyopenjtalk.done py3mmseg.done beamformit.done fairseq.done s3prl.done
+extra: warp-ctc.done warp-transducer.done chainer_ctc.done nkf.done moses.done mwerSegmenter.done pesq kenlm.done pyopenjtalk.done py3mmseg.done beamformit.done fairseq.done ctc-crf.done
 else
 python: activate_python.sh espnet.done pytorch.done
-extra: warp-ctc.done warp-transducer.done nkf.done moses.done mwerSegmenter.done pesq kenlm.done pyopenjtalk.done py3mmseg.done beamformit.done fairseq.done s3prl.done
+extra: warp-ctc.done warp-transducer.done nkf.done moses.done mwerSegmenter.done pesq kenlm.done pyopenjtalk.done py3mmseg.done beamformit.done fairseq.done ctc-crf.done
 endif
 
 
@@ -175,6 +175,10 @@ else
 	touch warp-transducer.done
 endif
 
+ctc-crf.done: pytorch.done conda_packages.done
+	. ./activate_python.sh && ./installers/install_ctc-crf.sh
+	touch ctc-crf.done
+
 chainer_ctc.done: chainer.done
 ifeq ($(strip $(CPU_ONLY)),)
 	[ -n "${CUDA_HOME}" ] || { echo -e "Error: CUDA_HOME is not set.\n    $$ . ./setup_cuda_env.sh <cuda-root>"; exit 1; }
@@ -227,13 +231,13 @@ check_install: python
 
 
 clean: clean_extra
-	rm -rf warp-ctc warp-transducer warp-rnnt chainer_ctc
+	rm -rf warp-ctc warp-transducer warp-rnnt chainer_ctc CAT
 	rm -rf *.done
 	find . -iname "*.pyc" -delete
 
 clean_python:
 	rm -rf warp-ctc warp-transducer warp-rnnt chainer_ctc
-	rm -f warp-ctc.done chainer_ctc.done espnet.done chainer.done pytorch.done warp-transducer.done
+	rm -f warp-ctc.done chainer_ctc.done espnet.done chainer.done pytorch.done warp-transducer.done ctc-crf.done
 	find . -iname "*.pyc" -delete
 
 clean_extra:

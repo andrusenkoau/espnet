@@ -267,7 +267,8 @@ class CustomConverter(object):
         """
         # batch should be located in list
         assert len(batch) == 1
-        xs, ys = batch[0]
+        # in case of auxiliary output fields in ys
+        xs, *ys = batch[0]
 
         # perform subsampling
         if self.subsampling_factor > 1:
@@ -302,12 +303,15 @@ class CustomConverter(object):
                 torch.from_numpy(
                     np.array(y[0][:]) if isinstance(y, tuple) else y
                 ).long()
-                for y in ys
+                for y in ys[0]
             ],
             self.ignore_id,
         ).to(device)
 
-        return xs_pad, ilens, ys_pad
+        if len(ys) == 1:
+            return xs_pad, ilens, ys_pad
+        else:
+            return xs_pad, ilens, ys_pad, ys[1:]
 
 
 class CustomConverterMulEnc(object):
@@ -424,6 +428,20 @@ def train(args):
     else:
         mtl_mode = "mtl"
         logging.info("Multitask learning mode")
+
+    # initialize CTC-CRF denominator fst
+    if args.ctc_type == "ctc-crf":
+        if not torch.cuda.is_available():
+            raise RuntimeError("ctc-crf training on CPU is not supported")
+        if not args.ctc_crf_den_lm or not os.path.isfile(args.ctc_crf_den_lm):
+            raise ValueError("ctc_crf_den_lm path must be valid")
+        if args.num_encs != 1:
+            raise NotImplementedError("Multi-encoder setup is not tested with ctc-crf")
+        import ctc_crf_base
+
+        TARGET_GPUS = list(range(args.ngpu))
+        gpus = torch.IntTensor(TARGET_GPUS)
+        ctc_crf_base.init_env(args.ctc_crf_den_lm, gpus)
 
     if (args.enc_init is not None or args.dec_init is not None) and args.num_encs == 1:
         model = load_trained_modules(idim_list[0], odim, args)
@@ -607,17 +625,21 @@ def train(args):
         oaxis=0,
     )
 
+    # load target path weights when in ctc-crf mode
+    load_auxiliary_output = ["weight"] if args.ctc_type == "ctc-crf" else None
     load_tr = LoadInputsAndTargets(
         mode="asr",
         load_output=True,
         preprocess_conf=args.preprocess_conf,
         preprocess_args={"train": True},  # Switch the mode of preprocessing
+        load_auxiliary_output=load_auxiliary_output,
     )
     load_cv = LoadInputsAndTargets(
         mode="asr",
         load_output=True,
         preprocess_conf=args.preprocess_conf,
         preprocess_args={"train": False},  # Switch the mode of preprocessing
+        load_auxiliary_output=load_auxiliary_output,
     )
     # hack to make batchsize argument as 1
     # actual bathsize is included in a list
@@ -939,6 +961,12 @@ def train(args):
     # Run the training
     trainer.run()
     check_early_stop(trainer, args.epochs)
+
+    # deinitialize CTC-CRF denominator fst
+    if args.ctc_type == "ctc-crf":
+        import ctc_crf_base
+
+        ctc_crf_base.release_env(gpus)
 
 
 def recog(args):

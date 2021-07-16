@@ -4,6 +4,8 @@
 """Encoder definition."""
 from typing import Optional
 from typing import Tuple
+import copy
+import logging
 
 import torch
 from typeguard import check_argument_types
@@ -25,15 +27,17 @@ from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
 from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.pytorch_backend.transformer.subsampling import check_short_utt
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
-from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling2
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling6
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling8
 from espnet.nets.pytorch_backend.transformer.subsampling import TooShortUttError
 from espnet.utils.dynamic_import import dynamic_import
 from espnet2.asr.encoder.abs_encoder import AbsEncoder
 
+from filelock import FileLock
+import fairseq
+from espnet2.asr.encoder.wav2vec2_encoder import download_w2v
 
-class TransformerEncoder(AbsEncoder):
+class FairSeqWav2Vec2TransformerEncoder(AbsEncoder):
     """Transformer encoder module.
 
     Args:
@@ -69,17 +73,9 @@ class TransformerEncoder(AbsEncoder):
         linear_units: int = 2048,
         num_blocks: int = 6,
         dropout_rate: float = 0.1,
-        positional_dropout_rate: float = 0.1,
-        attention_dropout_rate: float = 0.0,
-        input_layer: Optional[str] = "conv2d",
-        conv_filters: int = 0,
-        pos_enc_class=PositionalEncoding,
-        normalize_before: bool = True,
-        concat_after: bool = False,
-        positionwise_layer_type: str = "linear",
-        positionwise_conv_kernel_size: int = 1,
-        padding_idx: int = -1,
-        use_chunk=False,
+        w2v_url: str = "",
+        w2v_dir_path: str = "./",
+        use_chunk: bool = False,
         chunk_window: int = 0,
         chunk_left_context: int = 0,
         chunk_right_context: int = 0,
@@ -89,78 +85,44 @@ class TransformerEncoder(AbsEncoder):
         self._output_size = output_size
 
         self.min_subsampling_length = 1
-        if input_layer == "linear":
-            self.embed = EmbedAdapter(
-                torch.nn.Linear(input_size, output_size),
-                torch.nn.LayerNorm(output_size),
-                torch.nn.Dropout(dropout_rate),
-                torch.nn.ReLU(),
-                pos_enc_class(output_size, positional_dropout_rate),
-            )
-        elif input_layer == "conv2d":
-            self.embed = Conv2dSubsampling(input_size, conv_filters, output_size, dropout_rate)
-            self.min_subsampling_length = 7
-        elif input_layer == "conv2d2":
-            self.embed = Conv2dSubsampling2(input_size, output_size, dropout_rate)
-            self.min_subsampling_length = 3
-        elif input_layer == "conv2d6":
-            self.embed = Conv2dSubsampling6(input_size, output_size, dropout_rate)
-            self.min_subsampling_length = 11
-        elif input_layer == "conv2d8":
-            self.embed = Conv2dSubsampling8(input_size, output_size, dropout_rate)
-            self.min_subsampling_length = 15
-        elif input_layer == "embed":
-            self.embed = EmbedAdapter(
-                torch.nn.Embedding(input_size, output_size, padding_idx=padding_idx),
-                pos_enc_class(output_size, positional_dropout_rate),
-            )
-        elif input_layer is None:
-            self.embed = EmbedAdapter(
-                pos_enc_class(output_size, positional_dropout_rate)
-            )
-        else:
-            raise ValueError("unknown input_layer: " + input_layer)
-        self.normalize_before = normalize_before
-        if positionwise_layer_type == "linear":
-            positionwise_layer = PositionwiseFeedForward
-            positionwise_layer_args = (
-                output_size,
-                linear_units,
-                dropout_rate,
-            )
-        elif positionwise_layer_type == "conv1d":
-            positionwise_layer = MultiLayeredConv1d
-            positionwise_layer_args = (
-                output_size,
-                linear_units,
-                positionwise_conv_kernel_size,
-                dropout_rate,
-            )
-        elif positionwise_layer_type == "conv1d-linear":
-            positionwise_layer = Conv1dLinear
-            positionwise_layer_args = (
-                output_size,
-                linear_units,
-                positionwise_conv_kernel_size,
-                dropout_rate,
-            )
-        else:
-            raise NotImplementedError("Support only linear or conv1d.")
-        self.encoders = repeat(
+        attention_dim = output_size
+
+        # wav2vec part:
+        self.w2v_model_path = download_w2v(w2v_url, w2v_dir_path)
+        models, _, _ = fairseq.checkpoint_utils.load_model_ensemble_and_task(
+                    [self.w2v_model_path],
+                    arg_overrides={"data": w2v_dir_path},
+                )
+        self.feature_extractor = models[0].w2v_encoder.w2v_model.feature_extractor
+        self.pretrained_params = copy.deepcopy(self.feature_extractor.state_dict())
+        
+        # subsampling x2 part:
+        self.conv = torch.nn.Sequential(
+            torch.nn.Conv2d(1, 32, kernel_size=(3,3), stride=(2,2), padding=(1,1)),
+            torch.nn.ReLU(),
+        )
+        self.conv_out = torch.nn.Sequential(
+            torch.nn.Linear(32 * (512 // 2), attention_dim),
+            PositionalEncoding(attention_dim, 0.1),
+        )
+        
+        # MHA part:
+        positionwise_layer = PositionwiseFeedForward
+        positionwise_layer_args = (attention_dim, linear_units, dropout_rate)
+        self.MHA = repeat(
             num_blocks,
             lambda lnum: EncoderLayer(
-                output_size,
+                attention_dim,
                 MultiHeadedAttention(
-                    attention_heads, output_size, attention_dropout_rate
+                    attention_heads, attention_dim, dropout_rate
                 ),
                 positionwise_layer(*positionwise_layer_args),
                 dropout_rate,
-                normalize_before,
-                concat_after,
+                normalize_before=True,
+                concat_after=False,
             ),
         )
-        if self.normalize_before:
-            self.after_norm = LayerNorm(output_size)
+        self.after_norm = LayerNorm(attention_dim)
 
         # chunk attention attributes:
         self.use_chunk = use_chunk
@@ -186,40 +148,31 @@ class TransformerEncoder(AbsEncoder):
         Returns:
             position embedded tensor and mask
         """
+        #print(f"[DEBUG]: {self.feature_extractor.conv_layers[0][0].weight.shape}")
+        #print(f"[DEBUG]: {self.feature_extractor.conv_layers[0][0].weight}")
 
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
-
-        # chunk-attention part
-        if self.use_chunk and self.chunk_left_context > 0:
-            batch_size = xs_pad.shape[0]
-            seq_len = xs_pad.shape[1]
-            encoder_mask = chunk_attention_mask(
-                seq_len,
-                self.chunk_window,
-                chunk_left_context=self.chunk_left_context,
-                chunk_right_context=self.chunk_right_context,
-            )
-            encoder_masks = encoder_mask.expand(batch_size, -1, -1).to(xs_pad.device)
-
-            initial_masks = masks[:, :, :-2:2][:, :, :-2:2]
-            masks = encoder_masks & masks & masks.transpose(1, 2)
-        else:
-            initial_masks = masks
-
-        if xs_pad.size(1) < self.min_subsampling_length:
-            raise TooShortUttError(
-                f"has {xs_pad.size(1)} frames and is too short for subsampling "
-                + f"(it needs more than {self.min_subsampling_length} frames), "
-                + f"return empty results",
-                xs_pad.size(1),
-                self.min_subsampling_length,
-            )
-        xs_pad, masks = self.embed(xs_pad, masks)
-
-        xs_pad, masks = self.encoders(xs_pad, masks)
-
-        if self.normalize_before:
-            xs_pad = self.after_norm(xs_pad)
+        
+        with torch.no_grad():
+            _x = self.feature_extractor(xs_pad)  #(batch, feat_dim, time)
+        #print(x.shape[-1])
+        #print(_x.shape[-1])
+        subsampling = xs_pad.shape[-1] // _x.shape[-1]
+        masks = masks[:, :, ::subsampling]
+        if _x.shape[2] < masks.shape[2]:
+            #print(f"[WARNING]: _x.shape[2] ({_x.shape[2]}) < masks.shape[2] ({masks.shape[2]})")
+            masks = masks[:, :, :_x.shape[2]]
+            
+        assert _x.shape[2] == masks.shape[2], f"_x lenght {_x.shape[2]} must be equal to masks lenght {masks.shape[2]}"
+        
+        _x = _x.transpose(1,2).unsqueeze(1) # (b, c, t, f)
+        _x = self.conv(_x)
+        b, c, t, f = _x.size()
+        _x = self.conv_out(_x.transpose(1, 2).contiguous().view(b, t, c * f))
+        masks = masks[:, :, ::2]
+        _x, masks = self.MHA(_x, masks)
+        #print(f"[DEBUG]: masks.shape is {masks.shape}")
+        xs_pad = self.after_norm(_x)
 
         if masks is not None:
             if self.use_chunk:
@@ -229,6 +182,11 @@ class TransformerEncoder(AbsEncoder):
         else:
             olens = None
         return xs_pad, olens, None
+
+    def reload_pretrained_parameters(self):
+        self.feature_extractor.load_state_dict(self.pretrained_params)
+        logging.info("Pretrained Wav2Vec.feature_extractor model parameters reloaded!")
+
 
     def scripting_prep(self):
         """Torch.jit stripting preparations."""

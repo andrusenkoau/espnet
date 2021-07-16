@@ -1,4 +1,8 @@
 import logging
+import os
+import subprocess
+import tempfile
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -10,28 +14,46 @@ class CTC(torch.nn.Module):
 
     Args:
         odim: dimension of outputs
-        encoder_output_sizse: number of encoder projection units
+        encoder_output_size: number of encoder projection units
         dropout_rate: dropout rate (0.0 ~ 1.0)
         ctc_type: builtin or warpctc
         reduce: reduce the CTC loss into a scalar
     """
 
+    _ctc_types = ("builtin", "warpctc", "ctc-crf")
+
     def __init__(
         self,
         odim: int,
-        encoder_output_sizse: int,
+        encoder_output_size: int,
+        den_lm_path: Optional[str],
+        token_lm_path: Optional[str],
         dropout_rate: float = 0.0,
         ctc_type: str = "builtin",
         reduce: bool = True,
         ignore_nan_grad: bool = True,
+        lamb: float = 0.1,
+        ctc_crf_eager_mode: bool = False,
+        focal_gamma: float = 0.0,
+        entropy_beta: float = 0.0,
     ):
         assert check_argument_types()
+        assert (
+            ctc_type in self._ctc_types
+        ), f"ctc_type must be one of the following: {self._ctc_types}; {self.ctc_type}"
         super().__init__()
-        eprojs = encoder_output_sizse
+        eprojs = encoder_output_size
         self.dropout_rate = dropout_rate
         self.ctc_lo = torch.nn.Linear(eprojs, odim)
         self.ctc_type = ctc_type
         self.ignore_nan_grad = ignore_nan_grad
+        self.lamb = lamb
+        self.den_lm_path = den_lm_path
+        self.token_lm_path = token_lm_path
+        self.ctc_crf_eager_mode = ctc_crf_eager_mode
+        self.lms_are_set = False
+        self.focal_gamma = focal_gamma
+        self.entropy_beta = entropy_beta
 
         if self.ctc_type == "builtin":
             self.ctc_loss = torch.nn.CTCLoss(reduction="none")
@@ -40,13 +62,68 @@ class CTC(torch.nn.Module):
 
             if ignore_nan_grad:
                 logging.warning("ignore_nan_grad option is not supported for warp_ctc")
-            self.ctc_loss = warp_ctc.CTCLoss(size_average=True, reduce=reduce)
+            self.ctc_loss = warp_ctc.CTCLoss(size_average=False, reduce=False)
+        elif self.ctc_type == "ctc-crf":
+            from espnet2.asr.ctc_crf import CTC_CRF_LOSS
+
+            if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
+                logging.warning("den_lm_path for ctc-crf is not set or not valid.")
+
+            if not self.ctc_crf_eager_mode and (
+                self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
+            ):
+                logging.warning("token_lm_path for ctc-crf is not set or not valid.")
+
+            if not torch.cuda.is_available():
+                logging.warning(
+                    "CUDA is not available."
+                    " Attempt to calculate the loss will result in segmentation fault."
+                )
+
+            if self.ctc_crf_eager_mode:
+                logging.warning(
+                    "ctc-crf eager mode is active. Constant path weights are not used."
+                    " Expect negative and less representative loss values."
+                )
+
+            self.ctc_loss = CTC_CRF_LOSS(size_average=False, reduce=False, lamb=lamb, ignore_nan_grad=ignore_nan_grad)
         else:
-            raise ValueError(
-                f'ctc_type must be "builtin" or "warpctc": {self.ctc_type}'
-            )
+            raise NotImplementedError
 
         self.reduce = reduce
+
+    def __del__(self):
+        if self.ctc_type == "ctc-crf" and self.lms_are_set:
+            import ctc_crf_base
+
+            # It is assumed to be running on a single visible GPU
+            gpus = torch.IntTensor([0])
+            ctc_crf_base.release_env(gpus)
+            logging.info("den_lm released")
+
+    def _compute_path_weight(self, th_target, th_olen) -> torch.Tensor:
+        with tempfile.NamedTemporaryFile() as tmp:
+            start = 0
+            for i in range(len(th_olen)):
+                target_str = " ".join(
+                    [str(n) for n in (th_target[start : start + th_olen[i]]).tolist()]
+                )
+                tmp.write((f"name{i} {target_str}\n").encode())
+                start += th_olen[i]
+            tmp.flush()
+            output = subprocess.check_output(
+                ("path_weight", tmp.name, self.token_lm_path), stderr=subprocess.PIPE
+            )
+            path_weight = torch.Tensor(
+                [
+                    float(o.split()[-1])
+                    for o in output.decode("utf-8").strip().split("\n")
+                ]
+            )
+            return path_weight.mean()
+
+    def _compute_focal_loss(self, loss, ilen):
+        return (1 - torch.exp(-loss.div(ilen))) ** self.focal_gamma * loss
 
     def loss_fn(self, th_pred, th_target, th_ilen, th_olen) -> torch.Tensor:
         if self.ctc_type == "builtin":
@@ -94,30 +171,83 @@ class CTC(torch.nn.Module):
                     )
             else:
                 size = th_pred.size(1)
-
-            if self.reduce:
-                # Batch-size average
-                loss = loss.sum() / size
-            else:
-                loss = loss / size
-            return loss
-
         elif self.ctc_type == "warpctc":
             # warpctc only supports float32
             th_pred = th_pred.to(dtype=torch.float32)
+            size = th_pred.size(1)
 
             th_target = th_target.cpu().int()
             th_ilen = th_ilen.cpu().int()
             th_olen = th_olen.cpu().int()
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
-            if self.reduce:
-                # NOTE: sum() is needed to keep consistency since warpctc
-                # return as tensor w/ shape (1,)
-                # but builtin return as tensor w/o shape (scalar).
-                loss = loss.sum()
-            return loss
+        elif self.ctc_type == "ctc-crf":
+            # runtime den_lm initialization check
+            if not self.lms_are_set:
+                if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
+                    raise ValueError(f'"den_lm_path" must be valid: {self.den_lm_path}')
+                elif not self.ctc_crf_eager_mode and (
+                    self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
+                ):
+                    raise ValueError(
+                        f'"token_lm_path" must be valid: {self.token_lm_path}'
+                    )
+                elif self.ctc_lo.weight.device.type != "cuda":
+                    raise RuntimeError(
+                        "ctc-crf must use GPU device to compute the loss."
+                    )
+                else:
+                    import ctc_crf_base
+
+                    # It is assumed to be running on a single visible GPU
+                    # gpus = torch.IntTensor([0])
+                    # print(f'[DEBUG]: th_pred.device is: {th_pred.device}')
+                    gpus = torch.IntTensor([th_pred.device.index])
+                    ctc_crf_base.init_env(self.den_lm_path, gpus)
+                    logging.info("den_lm initialized")
+                    self.lms_are_set = True
+
+            th_pred = th_pred.log_softmax(2)
+            size = th_pred.size(1)
+
+            loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
+
+            if not self.ctc_crf_eager_mode:
+                loss_const = self._compute_path_weight(th_target, th_olen)
+                loss -= loss_const
         else:
             raise NotImplementedError
+
+        # Perform the maximum entropy regularization
+        # Check more detils in Liu et al, 2018, "Connectionist Temporal Classification
+        #                               with Maximum Entropy Regularization"
+        # Note that this option is simpler and more aggressive
+        # than proposed by Liu et al
+        if self.entropy_beta != 0.0:
+            if self.ctc_type == "warpctc":
+                th_pred = th_pred.log_softmax(2)
+            # Restore source loss values but keep gradients
+            loss_source = loss.detach()
+            loss = (1 - self.entropy_beta) * loss + self.entropy_beta * (
+                (th_pred.exp() * th_pred).sum(2).sum(0)
+            )
+            loss += loss_source - loss.detach()
+
+        # Compute focal CTC loss
+        # Check more detils in Feng et al, 2019, "Focal CTC Loss for Chinese Optical
+        #                               Character Recognition on Unbalanced Datasets"
+        if self.focal_gamma != 0.0:
+            # Restore source loss values but keep gradients
+            loss_source = loss.detach()
+            loss = self._compute_focal_loss(loss, th_ilen)
+            loss += loss_source - loss.detach()
+
+        if self.reduce:
+            # Batch-size average
+            loss = loss.sum() / size
+        else:
+            loss = loss / size
+
+        return loss
 
     def forward(self, hs_pad, hlens, ys_pad, ys_lens):
         """Calculate CTC loss.
