@@ -598,6 +598,7 @@ class Trainer:
                                 continue
                             scaler.step(optimizer)
                             scaler.update()
+                            optimizer.zero_grad()
 
                 else:
                     all_steps_are_invalid = False
