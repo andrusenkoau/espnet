@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
+from typing import Optional
 
 
 class EncoderLayer(nn.Module):
@@ -70,10 +71,16 @@ class EncoderLayer(nn.Module):
         self.size = size
         self.normalize_before = normalize_before
         self.concat_after = concat_after
-        if self.concat_after:
-            self.concat_linear = nn.Linear(size + size, size)
+        #if self.concat_after:
+        #    self.concat_linear = nn.Linear(size + size, size)
 
-    def forward(self, x_input, mask, cache=None):
+    def forward(
+        self,
+        x_input,
+        mask: Optional[torch.Tensor] = None,
+        pos_emb: Optional[torch.Tensor] = None,
+        cache: Optional[torch.Tensor] = None,
+        ):
         """Compute encoded features.
 
         Args:
@@ -88,11 +95,15 @@ class EncoderLayer(nn.Module):
             torch.Tensor: Mask tensor (#batch, time).
 
         """
-        if isinstance(x_input, tuple):
-            x, pos_emb = x_input[0], x_input[1]
-        else:
-            x, pos_emb = x_input, None
+        #if isinstance(x_input, tuple):
+        #    x, pos_emb = x_input[0], x_input[1]
+        #else:
+        #    x, pos_emb = x_input, None
+        x = x_input
 
+        #print("EncoderLayer..")
+        #print(f"[DEBUG]: x.shape is: {x.shape}")
+        #print(f"[DEBUG]: pos_emb.shape is: {pos_emb.shape}")
         # whether to use macaron style
         if self.feed_forward_macaron is not None:
             residual = x
@@ -116,15 +127,16 @@ class EncoderLayer(nn.Module):
             mask = None if mask is None else mask[:, -1:, :]
 
         if pos_emb is not None:
-            x_att = self.self_attn(x_q, x, x, pos_emb, mask)
+            #x_att = self.self_attn(x_q, x, x, pos_emb, mask)
+            x_att = self.self_attn(x_q, x, x, mask, pos_emb)
         else:
             x_att = self.self_attn(x_q, x, x, mask)
 
-        if self.concat_after:
-            x_concat = torch.cat((x, x_att), dim=-1)
-            x = residual + self.concat_linear(x_concat)
-        else:
-            x = residual + self.dropout(x_att)
+        #if self.concat_after:
+        #    x_concat = torch.cat((x, x_att), dim=-1)
+        #    x = residual + self.concat_linear(x_concat)
+        #else:
+        x = residual + self.dropout(x_att)
         if not self.normalize_before:
             x = self.norm_mha(x)
 
@@ -151,7 +163,7 @@ class EncoderLayer(nn.Module):
         if cache is not None:
             x = torch.cat([cache, x], dim=1)
 
-        if pos_emb is not None:
-            return (x, pos_emb), mask
+        #if pos_emb is not None:
+        #    return (x, pos_emb), mask
 
-        return x, mask
+        return x, mask, pos_emb
