@@ -318,10 +318,13 @@ def get_node_rank(prior=None, launcher: str = None) -> Optional[int]:
             raise RuntimeError("This process seems not to be launched by 'srun'")
 
         # Assume ntasks_per_node == 1
+        #print(os.environ)
         if os.environ["SLURM_STEP_NUM_NODES"] != os.environ["SLURM_NTASKS"]:
-            raise RuntimeError(
-                "Run with --ntasks_per_node=1 if mutliprocessing_distributed=true"
-            )
+            return(int(os.environ["SLURM_PROCID"]))
+
+            #raise RuntimeError(
+            #    "Run with --ntasks_per_node=1 if mutliprocessing_distributed=true"
+            #)
         return int(os.environ["SLURM_NODEID"])
     elif launcher == "mpi":
         # Use mpi4py only for initialization and not using for communication
