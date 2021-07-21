@@ -36,5 +36,14 @@ class LayerNorm(torch.nn.LayerNorm):
 
         """
         if self.dim == -1:
-            return self.forward(x)
-        return self.forward(x.transpose(1, -1)).transpose(1, -1)
+#<<<<<<< master
+            return super(LayerNorm, self).forward(x)
+        return (
+            super(LayerNorm, self)
+            .forward(x.transpose(self.dim, -1))
+            .transpose(self.dim, -1)
+        )
+#=======
+#            return self.forward(x)
+#        return self.forward(x.transpose(1, -1)).transpose(1, -1)
+#>>>>>>> ctc-crf-master

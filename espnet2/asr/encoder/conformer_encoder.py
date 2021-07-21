@@ -37,6 +37,7 @@ from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
 from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.pytorch_backend.transformer.subsampling import check_short_utt
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
+from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling2
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling6
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling8
 from espnet.nets.pytorch_backend.transformer.subsampling import TooShortUttError
@@ -161,6 +162,14 @@ class ConformerEncoder(AbsEncoder):
                 pos_enc_class(output_size, positional_dropout_rate),
             )
             self.min_subsampling_length = 7
+        elif input_layer == "conv2d2":
+            self.embed = Conv2dSubsampling2(
+                input_size,
+                output_size,
+                dropout_rate,
+                pos_enc_class(output_size, positional_dropout_rate),
+            )
+            self.min_subsampling_length = 3
         elif input_layer == "conv2d6":
             self.embed = Conv2dSubsampling6(
                 input_size,
@@ -327,15 +336,20 @@ class ConformerEncoder(AbsEncoder):
                 xs_pad.size(1),
                 self.min_subsampling_length,
             )
-        xs_pad, masks = self.embed(xs_pad, masks)
 
+        xs_pad, masks = self.embed(xs_pad, masks)
         if isinstance(xs_pad, tuple):
             xs_pad, pos_emb = xs_pad[0], xs_pad[1]
         else:
-            xs_pad, pos_emb = xs_pad, None
+            xs_pad, pos_emb = xs_pad, None       
+        #print(f"[DEBUG]: xs_pad.shape is: {xs_pad.shape}")
+        #print(f"[DEBUG]: pos_emb.shape is: {pos_emb.shape}")
+        #print(f"[DEBUG]: masks.shape is: {masks.shape}")
+        xs_pad, masks, _ = self.encoders(xs_pad, masks, pos_emb)
 
-        xs_pad, masks = self.encoders(xs_pad, masks, pos_emb)[:2]
-
+        #print(f"[DEBUG]: xs_pad.shape is: {xs_pad.shape}")
+        #if isinstance(xs_pad, tuple):
+        #    xs_pad = xs_pad[0]
         if self.normalize_before:
             xs_pad = self.after_norm(xs_pad)
 
