@@ -33,7 +33,7 @@ requirements = {
         "librosa>=0.8.0",
         # Natural language processing related
         # FIXME(kamo): Sentencepiece 0.1.90 breaks backwardcompatibility?
-        "sentencepiece<0.1.90,>=0.1.82",
+        "sentencepiece",
         "nltk>=3.4.5",
         # File IO related
         "PyYAML>=5.1.2",
