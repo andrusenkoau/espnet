@@ -101,9 +101,6 @@ class EncoderLayer(nn.Module):
         #    x, pos_emb = x_input, None
         x = x_input
 
-        #print("EncoderLayer..")
-        #print(f"[DEBUG]: x.shape is: {x.shape}")
-        #print(f"[DEBUG]: pos_emb.shape is: {pos_emb.shape}")
         # whether to use macaron style
         if self.feed_forward_macaron is not None:
             residual = x
@@ -157,8 +154,9 @@ class EncoderLayer(nn.Module):
         if not self.normalize_before:
             x = self.norm_ff(x)
 
-        if self.conv_module is not None:
-            x = self.norm_final(x)
+        #this comment can help you to train model for russian and other hard languages
+        #if self.conv_module is not None:
+        #    x = self.norm_final(x)
 
         if cache is not None:
             x = torch.cat([cache, x], dim=1)
