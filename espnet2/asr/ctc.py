@@ -7,6 +7,7 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 from typeguard import check_argument_types
+import k2
 
 
 class CTC(torch.nn.Module):
@@ -20,7 +21,7 @@ class CTC(torch.nn.Module):
         reduce: reduce the CTC loss into a scalar
     """
 
-    _ctc_types = ("builtin", "warpctc", "ctc-crf")
+    _ctc_types = ("builtin", "warpctc", "sd")
 
     def __init__(
         self,
@@ -30,6 +31,7 @@ class CTC(torch.nn.Module):
         token_lm_path: Optional[str],
         dropout_rate: float = 0.0,
         ctc_type: str = "builtin",
+        ctc_topo_type: str = "ctc_compact",
         reduce: bool = True,
         ignore_nan_grad: bool = True,
         lamb: float = 0.1,
@@ -46,6 +48,8 @@ class CTC(torch.nn.Module):
         self.dropout_rate = dropout_rate
         self.ctc_lo = torch.nn.Linear(eprojs, odim)
         self.ctc_type = ctc_type
+        self.ctc_topo_type = ctc_topo_type
+        self.num_classes = odim
         self.ignore_nan_grad = ignore_nan_grad
         self.lamb = lamb
         self.den_lm_path = den_lm_path
@@ -63,30 +67,48 @@ class CTC(torch.nn.Module):
             if ignore_nan_grad:
                 logging.warning("ignore_nan_grad option is not supported for warp_ctc")
             self.ctc_loss = warp_ctc.CTCLoss(size_average=False, reduce=False)
-        elif self.ctc_type == "ctc-crf":
-            from espnet2.asr.ctc_crf import CTC_CRF_LOSS
+        # elif self.ctc_type == "ctc-crf":
+        #     from espnet2.asr.ctc_crf import CTC_CRF_LOSS
 
-            if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
-                logging.warning("den_lm_path for ctc-crf is not set or not valid.")
+        #     if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
+        #         logging.warning("den_lm_path for ctc-crf is not set or not valid.")
 
-            if not self.ctc_crf_eager_mode and (
-                self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
-            ):
-                logging.warning("token_lm_path for ctc-crf is not set or not valid.")
+        #     if not self.ctc_crf_eager_mode and (
+        #         self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
+        #     ):
+        #         logging.warning("token_lm_path for ctc-crf is not set or not valid.")
 
-            if not torch.cuda.is_available():
-                logging.warning(
-                    "CUDA is not available."
-                    " Attempt to calculate the loss will result in segmentation fault."
-                )
+        #     if not torch.cuda.is_available():
+        #         logging.warning(
+        #             "CUDA is not available."
+        #             " Attempt to calculate the loss will result in segmentation fault."
+        #         )
 
-            if self.ctc_crf_eager_mode:
-                logging.warning(
-                    "ctc-crf eager mode is active. Constant path weights are not used."
-                    " Expect negative and less representative loss values."
-                )
+        #     if self.ctc_crf_eager_mode:
+        #         logging.warning(
+        #             "ctc-crf eager mode is active. Constant path weights are not used."
+        #             " Expect negative and less representative loss values."
+        #         )
 
-            self.ctc_loss = CTC_CRF_LOSS(size_average=False, reduce=False, lamb=lamb, ignore_nan_grad=ignore_nan_grad)
+            # self.ctc_loss = CTC_CRF_LOSS(size_average=False, reduce=False, lamb=lamb, ignore_nan_grad=ignore_nan_grad)
+        elif self.ctc_type == "sd":
+            from espnet2.asr.k2.sd import SDLoss
+
+            with open(self.token_lm_path, encoding='utf-8') as fn:
+                token_lm_text_str = fn.read()
+            token_lm = k2.Fsa.from_openfst(token_lm_text_str, acceptor=False)
+            #token_lm=''
+            self.ctc_loss = SDLoss(
+                                num_classes=self.num_classes,
+                                blank=0,
+                                reduction="none",
+                                topo_type=self.ctc_topo_type,
+                                token_lm=token_lm,
+                                intersect_pruned=False
+            )
+
+
+
         else:
             raise NotImplementedError
 
@@ -180,40 +202,67 @@ class CTC(torch.nn.Module):
             th_ilen = th_ilen.cpu().int()
             th_olen = th_olen.cpu().int()
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
-        elif self.ctc_type == "ctc-crf":
-            # runtime den_lm initialization check
-            if not self.lms_are_set:
-                if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
-                    raise ValueError(f'"den_lm_path" must be valid: {self.den_lm_path}')
-                elif not self.ctc_crf_eager_mode and (
-                    self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
-                ):
-                    raise ValueError(
-                        f'"token_lm_path" must be valid: {self.token_lm_path}'
-                    )
-                elif self.ctc_lo.weight.device.type != "cuda":
-                    raise RuntimeError(
-                        "ctc-crf must use GPU device to compute the loss."
-                    )
-                else:
-                    import ctc_crf_base
+        # elif self.ctc_type == "ctc-crf":
+        #     # runtime den_lm initialization check
+        #     if not self.lms_are_set:
+        #         if self.den_lm_path is None or not os.path.isfile(self.den_lm_path):
+        #             raise ValueError(f'"den_lm_path" must be valid: {self.den_lm_path}')
+        #         elif not self.ctc_crf_eager_mode and (
+        #             self.token_lm_path is None or not os.path.isfile(self.token_lm_path)
+        #         ):
+        #             raise ValueError(
+        #                 f'"token_lm_path" must be valid: {self.token_lm_path}'
+        #             )
+        #         elif self.ctc_lo.weight.device.type != "cuda":
+        #             raise RuntimeError(
+        #                 "ctc-crf must use GPU device to compute the loss."
+        #             )
+        #         else:
+        #             import ctc_crf_base
 
-                    # It is assumed to be running on a single visible GPU
-                    # gpus = torch.IntTensor([0])
-                    # print(f'[DEBUG]: th_pred.device is: {th_pred.device}')
-                    gpus = torch.IntTensor([th_pred.device.index])
-                    ctc_crf_base.init_env(self.den_lm_path, gpus)
-                    logging.info("den_lm initialized")
-                    self.lms_are_set = True
+        #             # It is assumed to be running on a single visible GPU
+        #             # gpus = torch.IntTensor([0])
+        #             # print(f'[DEBUG]: th_pred.device is: {th_pred.device}')
+        #             gpus = torch.IntTensor([th_pred.device.index])
+        #             ctc_crf_base.init_env(self.den_lm_path, gpus)
+        #             logging.info("den_lm initialized")
+        #             self.lms_are_set = True
 
-            th_pred = th_pred.log_softmax(2)
-            size = th_pred.size(1)
+        #     th_pred = th_pred.log_softmax(2)
+        #     size = th_pred.size(1)
 
-            loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
+        #     loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
 
-            if not self.ctc_crf_eager_mode:
-                loss_const = self._compute_path_weight(th_target, th_olen)
-                loss -= loss_const
+        #     if not self.ctc_crf_eager_mode:
+        #         loss_const = self._compute_path_weight(th_target, th_olen)
+        #         loss -= loss_const
+        elif self.ctc_type == "sd":
+            #print(f"[DEBUG]: th_ilen.type(): {th_ilen.type()} and th_ilen.device: {th_ilen.device}")
+            #input_lengths = torch.Tensor(th_ilen)
+            #label_lengths = torch.Tensor(th_olen)
+            
+            #print(f"[DEBUG]: th_pred.type(): {th_pred.type()} and th_pred.device: {th_pred.device}")
+            #log_probs = th_pred.float()
+            #print(f"[DEBUG]: th_target.type(): {th_target.type()} and th_target.device: {th_target.device}")
+            #targets = th_target.long()
+            #input_lengths = input_lengths.long().to('cuda')
+            #target_lengths = label_lengths.long().to('cuda')
+            
+            # (L, B, D) -> (B, L, D)
+            th_pred = th_pred.transpose(0, 1)
+            # print(f"th_pred.shape is: {th_pred.shape}")
+            # print(f"th_target.shape is: {th_target.shape}")
+            # print(f"th_ilen.shape is: {th_ilen.shape}")
+            # print(f"th_olen.shape is: {th_olen.shape}")
+
+            loss = self.ctc_loss(
+                            log_probs=th_pred,
+                            targets=th_target,
+                            input_lengths=th_ilen,
+                            target_lengths=th_olen,
+            )
+            #loss = torch.mean(loss)
+            size = th_pred.size(0)
         else:
             raise NotImplementedError
 
@@ -264,7 +313,10 @@ class CTC(torch.nn.Module):
         ys_hat = ys_hat.transpose(0, 1)
 
         # (B, L) -> (BxL,)
-        ys_true = torch.cat([ys_pad[i, :l] for i, l in enumerate(ys_lens)])
+        if self.ctc_type != "sd":
+            ys_true = torch.cat([ys_pad[i, :l] for i, l in enumerate(ys_lens)])
+        else:
+            ys_true = ys_pad
 
         loss = self.loss_fn(ys_hat, ys_true, hlens, ys_lens).to(
             device=hs_pad.device, dtype=hs_pad.dtype
