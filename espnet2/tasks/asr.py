@@ -200,18 +200,6 @@ class ASRTask(AbsTask):
             help="The keyword arguments for CTC class.",
         )
         group.add_argument(
-            "--ctc_crf_den_lm_path",
-            type=str_or_none,
-            default=None,
-            help="Denominator lm path for ctc-crf loss",
-        )
-        group.add_argument(
-            "--ctc_crf_token_lm_path",
-            type=str_or_none,
-            default=None,
-            help="Token lm path for ctc-crf loss",
-        )
-        group.add_argument(
             "--token_lm_path",
             type=str_or_none,
             default=None,
@@ -475,7 +463,6 @@ class ASRTask(AbsTask):
         ctc = CTC(
             odim=vocab_size,
             encoder_output_size=encoder.output_size(),
-            den_lm_path=args.ctc_crf_den_lm_path,
             token_lm_path=args.token_lm_path,
             **args.ctc_conf,
         )
