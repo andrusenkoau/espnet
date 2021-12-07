@@ -9,7 +9,7 @@ import torch
 import logging
 
 import ctc_crf_base
-import warpctc_pytorch as warp_ctc
+#import warpctc_pytorch as warp_ctc
 
 def _assert_no_grad(tensor):
     assert not tensor.requires_grad, "shouldn't require grads"
