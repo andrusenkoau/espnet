@@ -6,12 +6,18 @@
 import logging
 import torch
 
-from espnet.nets.pytorch_backend.nets_utils import rename_state_dict
+from espnet.nets.pytorch_backend.nets_utils import (
+    chunk_attention_mask,  # noqa: H301
+    rename_state_dict,  # noqa: H301
+)
 from espnet.nets.pytorch_backend.transducer.vgg2l import VGG2L
 from espnet.nets.pytorch_backend.transformer.attention import MultiHeadedAttention
 from espnet.nets.pytorch_backend.transformer.dynamic_conv import DynamicConvolution
 from espnet.nets.pytorch_backend.transformer.dynamic_conv2d import DynamicConvolution2D
-from espnet.nets.pytorch_backend.transformer.embedding import PositionalEncoding
+from espnet.nets.pytorch_backend.transformer.embedding import (
+    EmbedAdapter,  # noqa: H301
+    PositionalEncoding,  # noqa: H301
+)
 from espnet.nets.pytorch_backend.transformer.encoder_layer import EncoderLayer
 from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
 from espnet.nets.pytorch_backend.transformer.lightconv import LightweightConvolution
@@ -25,6 +31,7 @@ from espnet.nets.pytorch_backend.transformer.repeat import repeat
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling6
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling8
+from espnet.utils.dynamic_import import dynamic_import
 
 
 def _pre_hook(
@@ -102,10 +109,17 @@ class Encoder(torch.nn.Module):
         positionwise_conv_kernel_size=1,
         selfattention_layer_type="selfattn",
         padding_idx=-1,
-        stochastic_depth_rate=0.0,
-        intermediate_layers=None,
-        ctc_softmax=None,
-        conditioning_layer_dim=None,
+# <<<<<<< master
+#         stochastic_depth_rate=0.0,
+#         intermediate_layers=None,
+#         ctc_softmax=None,
+#         conditioning_layer_dim=None,
+# =======
+        use_chunk=False,
+        chunk_window=1,
+        chunk_left_context=0,
+        chunk_right_context=0,
+        use_checkpointing=False,
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -113,7 +127,7 @@ class Encoder(torch.nn.Module):
 
         self.conv_subsampling_factor = 1
         if input_layer == "linear":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Linear(idim, attention_dim),
                 torch.nn.LayerNorm(attention_dim),
                 torch.nn.Dropout(dropout_rate),
@@ -141,22 +155,26 @@ class Encoder(torch.nn.Module):
             self.embed = VGG2L(idim, attention_dim)
             self.conv_subsampling_factor = 4
         elif input_layer == "embed":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Embedding(idim, attention_dim, padding_idx=padding_idx),
                 pos_enc_class(attention_dim, positional_dropout_rate),
             )
         elif isinstance(input_layer, torch.nn.Module):
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 input_layer,
                 pos_enc_class(attention_dim, positional_dropout_rate),
             )
         elif input_layer is None:
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 pos_enc_class(attention_dim, positional_dropout_rate)
             )
         else:
             raise ValueError("unknown input_layer: " + input_layer)
         self.normalize_before = normalize_before
+
+        # track the number of arguments of sequential modules for JIT disamdiguation
+        self.num_sequential_args = 2
+
         positionwise_layer, positionwise_layer_args = self.get_positionwise_layer(
             positionwise_layer_type,
             attention_dim,
@@ -257,13 +275,20 @@ class Encoder(torch.nn.Module):
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
 
-        self.intermediate_layers = intermediate_layers
-        self.use_conditioning = True if ctc_softmax is not None else False
-        if self.use_conditioning:
-            self.ctc_softmax = ctc_softmax
-            self.conditioning_layer = torch.nn.Linear(
-                conditioning_layer_dim, attention_dim
-            )
+# <<<<<<< master
+#         self.intermediate_layers = intermediate_layers
+#         self.use_conditioning = True if ctc_softmax is not None else False
+#         if self.use_conditioning:
+#             self.ctc_softmax = ctc_softmax
+#             self.conditioning_layer = torch.nn.Linear(
+#                 conditioning_layer_dim, attention_dim
+#             )
+# =======
+        # chunk attention attributes:
+        self.use_chunk = use_chunk
+        self.chunk_window = chunk_window
+        self.chunk_left_context = chunk_left_context
+        self.chunk_right_context = chunk_right_context
 
     def get_positionwise_layer(
         self,
@@ -309,40 +334,60 @@ class Encoder(torch.nn.Module):
             torch.Tensor: Mask tensor (#batch, time).
 
         """
-        if isinstance(
-            self.embed,
-            (Conv2dSubsampling, Conv2dSubsampling6, Conv2dSubsampling8, VGG2L),
-        ):
-            xs, masks = self.embed(xs, masks)
+        xs, masks = self.embed(xs, masks)
+
+        # chunk-attention part
+        if self.use_chunk:
+            batch_size = xs.shape[0]
+            seq_len = xs.shape[1]
+            encoder_mask = chunk_attention_mask(
+                seq_len,
+                self.chunk_window,
+                chunk_left_context=self.chunk_left_context,
+                chunk_right_context=self.chunk_right_context,
+            )
+            encoder_masks = encoder_mask.expand(batch_size, -1, -1).to(xs.device)
+
+            encoder_masks = encoder_masks & masks & masks.transpose(1, 2)
+
         else:
-            xs = self.embed(xs)
+# <<<<<<< master
+#             xs = self.embed(xs)
 
-        if self.intermediate_layers is None:
-            xs, masks = self.encoders(xs, masks)
-        else:
-            intermediate_outputs = []
-            for layer_idx, encoder_layer in enumerate(self.encoders):
-                xs, masks = encoder_layer(xs, masks)
+#         if self.intermediate_layers is None:
+#             xs, masks = self.encoders(xs, masks)
+#         else:
+#             intermediate_outputs = []
+#             for layer_idx, encoder_layer in enumerate(self.encoders):
+#                 xs, masks = encoder_layer(xs, masks)
 
-                if (
-                    self.intermediate_layers is not None
-                    and layer_idx + 1 in self.intermediate_layers
-                ):
-                    encoder_output = xs
-                    # intermediate branches also require normalization.
-                    if self.normalize_before:
-                        encoder_output = self.after_norm(encoder_output)
-                    intermediate_outputs.append(encoder_output)
+#                 if (
+#                     self.intermediate_layers is not None
+#                     and layer_idx + 1 in self.intermediate_layers
+#                 ):
+#                     encoder_output = xs
+#                     # intermediate branches also require normalization.
+#                     if self.normalize_before:
+#                         encoder_output = self.after_norm(encoder_output)
+#                     intermediate_outputs.append(encoder_output)
 
-                    if self.use_conditioning:
-                        intermediate_result = self.ctc_softmax(encoder_output)
-                        xs = xs + self.conditioning_layer(intermediate_result)
+#                     if self.use_conditioning:
+#                         intermediate_result = self.ctc_softmax(encoder_output)
+#                         xs = xs + self.conditioning_layer(intermediate_result)
 
+#         if self.normalize_before:
+#             xs = self.after_norm(xs)
+
+#         if self.intermediate_layers is not None:
+#             return xs, masks, intermediate_outputs
+# =======
+            encoder_masks = masks
+
+        xs, encoder_masks = self.encoders(xs, encoder_masks)
         if self.normalize_before:
             xs = self.after_norm(xs)
 
-        if self.intermediate_layers is not None:
-            return xs, masks, intermediate_outputs
+        # we do not want to pass chunked encoder_masks further
         return xs, masks
 
     def forward_one_step(self, xs, masks, cache=None):
@@ -359,10 +404,7 @@ class Encoder(torch.nn.Module):
             List[torch.Tensor]: List of new cache tensors.
 
         """
-        if isinstance(self.embed, Conv2dSubsampling):
-            xs, masks = self.embed(xs, masks)
-        else:
-            xs = self.embed(xs)
+        xs, masks = self.embed(xs, masks)
         if cache is None:
             cache = [None for _ in range(len(self.encoders))]
         new_cache = []
@@ -372,3 +414,14 @@ class Encoder(torch.nn.Module):
         if self.normalize_before:
             xs = self.after_norm(xs)
         return xs, masks, new_cache
+
+    def scripting_prep(self):
+        """Torch.jit stripting preparations."""
+        # disambiguate MultiSequential encoders
+        file_path = "espnet.nets.pytorch_backend.transformer.repeat"
+        encoders_class_name = "{}:MultiSequentialArg{}".format(
+            file_path,
+            self.num_sequential_args,
+        )
+        encoders_class = dynamic_import(encoders_class_name)
+        self.encoders = encoders_class(*[layer for layer in self.encoders])

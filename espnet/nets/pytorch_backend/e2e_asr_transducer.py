@@ -9,12 +9,18 @@ import numpy
 from typing import List
 
 import chainer
+import numpy as np
 import torch
 
 from espnet.nets.asr_interface import ASRInterface
 from espnet.nets.beam_search_transducer import BeamSearchTransducer
 from espnet.nets.pytorch_backend.nets_utils import get_subsample
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import pad_list
+from espnet.nets.pytorch_backend.nets_utils import to_device
+from espnet.nets.pytorch_backend.nets_utils import to_torch_tensor
+from espnet.nets.pytorch_backend.rnn.attentions import att_for
+from espnet.nets.pytorch_backend.rnn.encoders import encoder_for
 from espnet.nets.pytorch_backend.transducer.arguments import (
     add_auxiliary_task_arguments,  # noqa: H301
     add_custom_decoder_arguments,  # noqa: H301
@@ -460,6 +466,7 @@ class E2E(ASRInterface, torch.nn.Module):
         enc_out, _ = self.encoder(feats, None)
 
         return enc_out.squeeze(0)
+
 
     def encode_rnn(self, feats: numpy.ndarray) -> torch.Tensor:
         """Encode acoustic features.

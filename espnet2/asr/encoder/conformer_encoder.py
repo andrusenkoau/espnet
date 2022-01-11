@@ -15,12 +15,14 @@ from espnet.nets.pytorch_backend.conformer.convolution import ConvolutionModule
 from espnet.nets.pytorch_backend.conformer.encoder_layer import EncoderLayer
 from espnet.nets.pytorch_backend.nets_utils import get_activation
 from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import chunk_attention_mask
 from espnet.nets.pytorch_backend.transformer.attention import (
     MultiHeadedAttention,  # noqa: H301
     RelPositionMultiHeadedAttention,  # noqa: H301
     LegacyRelPositionMultiHeadedAttention,  # noqa: H301
 )
 from espnet.nets.pytorch_backend.transformer.embedding import (
+    EmbedAdapter,  # noqa: H301
     PositionalEncoding,  # noqa: H301
     ScaledPositionalEncoding,  # noqa: H301
     RelPositionalEncoding,  # noqa: H301
@@ -39,6 +41,7 @@ from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsamplin
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling6
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling8
 from espnet.nets.pytorch_backend.transformer.subsampling import TooShortUttError
+from espnet.utils.dynamic_import import dynamic_import
 from espnet2.asr.encoder.abs_encoder import AbsEncoder
 
 
@@ -77,6 +80,9 @@ class ConformerEncoder(AbsEncoder):
 
     """
 
+    # track the number of arguments of sequential modules for JIT disamdiguation
+    num_sequential_args = 3
+
     def __init__(
         self,
         input_size: int,
@@ -88,6 +94,7 @@ class ConformerEncoder(AbsEncoder):
         positional_dropout_rate: float = 0.1,
         attention_dropout_rate: float = 0.0,
         input_layer: str = "conv2d",
+        conv_filters: int = 0,
         normalize_before: bool = True,
         concat_after: bool = False,
         positionwise_layer_type: str = "linear",
@@ -101,6 +108,10 @@ class ConformerEncoder(AbsEncoder):
         zero_triu: bool = False,
         cnn_module_kernel: int = 31,
         padding_idx: int = -1,
+        use_chunk=False,
+        chunk_window: int = 0,
+        chunk_left_context: int = 0,
+        chunk_right_context: int = 0,
     ):
         assert check_argument_types()
         super().__init__()
@@ -134,8 +145,9 @@ class ConformerEncoder(AbsEncoder):
         else:
             raise ValueError("unknown pos_enc_layer: " + pos_enc_layer_type)
 
+        self.min_subsampling_length = 1
         if input_layer == "linear":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Linear(input_size, output_size),
                 torch.nn.LayerNorm(output_size),
                 torch.nn.Dropout(dropout_rate),
@@ -144,10 +156,12 @@ class ConformerEncoder(AbsEncoder):
         elif input_layer == "conv2d":
             self.embed = Conv2dSubsampling(
                 input_size,
+                conv_filters,
                 output_size,
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
+            self.min_subsampling_length = 7
         elif input_layer == "conv2d2":
             self.embed = Conv2dSubsampling2(
                 input_size,
@@ -155,32 +169,37 @@ class ConformerEncoder(AbsEncoder):
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
+            self.min_subsampling_length = 3
         elif input_layer == "conv2d6":
             self.embed = Conv2dSubsampling6(
                 input_size,
+                conv_filters,
                 output_size,
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
+            self.min_subsampling_length = 11
         elif input_layer == "conv2d8":
             self.embed = Conv2dSubsampling8(
                 input_size,
+                conv_filters,
                 output_size,
                 dropout_rate,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
+            self.min_subsampling_length = 15
         elif input_layer == "embed":
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 torch.nn.Embedding(input_size, output_size, padding_idx=padding_idx),
                 pos_enc_class(output_size, positional_dropout_rate),
             )
         elif isinstance(input_layer, torch.nn.Module):
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 input_layer,
                 pos_enc_class(output_size, positional_dropout_rate),
             )
         elif input_layer is None:
-            self.embed = torch.nn.Sequential(
+            self.embed = EmbedAdapter(
                 pos_enc_class(output_size, positional_dropout_rate)
             )
         else:
@@ -262,6 +281,12 @@ class ConformerEncoder(AbsEncoder):
         if self.normalize_before:
             self.after_norm = LayerNorm(output_size)
 
+        # chunk attention attributes:
+        self.use_chunk = use_chunk
+        self.chunk_window = chunk_window
+        self.chunk_left_context = chunk_left_context
+        self.chunk_right_context = chunk_right_context
+
     def output_size(self) -> int:
         return self._output_size
 
@@ -269,8 +294,8 @@ class ConformerEncoder(AbsEncoder):
         self,
         xs_pad: torch.Tensor,
         ilens: torch.Tensor,
-        prev_states: torch.Tensor = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        prev_states: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         """Calculate forward propagation.
 
         Args:
@@ -286,28 +311,64 @@ class ConformerEncoder(AbsEncoder):
         """
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
 
-        if (
-            isinstance(self.embed, Conv2dSubsampling)
-            or isinstance(self.embed, Conv2dSubsampling2)
-            or isinstance(self.embed, Conv2dSubsampling6)
-            or isinstance(self.embed, Conv2dSubsampling8)
-        ):
-            short_status, limit_size = check_short_utt(self.embed, xs_pad.size(1))
-            if short_status:
-                raise TooShortUttError(
-                    f"has {xs_pad.size(1)} frames and is too short for subsampling "
-                    + f"(it needs more than {limit_size} frames), return empty results",
-                    xs_pad.size(1),
-                    limit_size,
-                )
-            xs_pad, masks = self.embed(xs_pad, masks)
+        # chunk-attention part
+        if self.use_chunk and self.chunk_left_context > 0:
+            batch_size = xs_pad.shape[0]
+            seq_len = xs_pad.shape[1]
+            encoder_mask = chunk_attention_mask(
+                seq_len,
+                self.chunk_window,
+                chunk_left_context=self.chunk_left_context,
+                chunk_right_context=self.chunk_right_context,
+            )
+            encoder_masks = encoder_mask.expand(batch_size, -1, -1).to(xs_pad.device)
+
+            initial_masks = masks[:, :, :-2:2][:, :, :-2:2]
+            masks = encoder_masks & masks & masks.transpose(1, 2)
         else:
-            xs_pad = self.embed(xs_pad)
-        xs_pad, masks = self.encoders(xs_pad, masks)
+            initial_masks = masks
+
+        if xs_pad.size(1) < self.min_subsampling_length:
+            raise TooShortUttError(
+                f"has {xs_pad.size(1)} frames and is too short for subsampling "
+                + f"(it needs more than {self.min_subsampling_length} frames), "
+                + f"return empty results",
+                xs_pad.size(1),
+                self.min_subsampling_length,
+            )
+
+        xs_pad, masks = self.embed(xs_pad, masks)
         if isinstance(xs_pad, tuple):
-            xs_pad = xs_pad[0]
+            xs_pad, pos_emb = xs_pad[0], xs_pad[1]
+        else:
+            xs_pad, pos_emb = xs_pad, None       
+        #print(f"[DEBUG]: xs_pad.shape is: {xs_pad.shape}")
+        #print(f"[DEBUG]: pos_emb.shape is: {pos_emb.shape}")
+        #print(f"[DEBUG]: masks.shape is: {masks.shape}")
+        xs_pad, masks, _ = self.encoders(xs_pad, masks, pos_emb)
+
+        #print(f"[DEBUG]: xs_pad.shape is: {xs_pad.shape}")
+        #if isinstance(xs_pad, tuple):
+        #    xs_pad = xs_pad[0]
         if self.normalize_before:
             xs_pad = self.after_norm(xs_pad)
 
-        olens = masks.squeeze(1).sum(1)
+        if masks is not None:
+            if self.use_chunk:
+                olens = initial_masks.squeeze(1).sum(1)
+            else:
+                olens = masks.squeeze(1).sum(1)
+        else:
+            olens = None
         return xs_pad, olens, None
+
+    def scripting_prep(self):
+        """Torch.jit stripting preparations."""
+        # disambiguate MultiSequential encoders
+        file_path = "espnet.nets.pytorch_backend.transformer.repeat"
+        encoders_class_name = "{}:MultiSequentialArg{}".format(
+            file_path,
+            self.num_sequential_args,
+        )
+        encoders_class = dynamic_import(encoders_class_name)
+        self.encoders = encoders_class(*[layer for layer in self.encoders])

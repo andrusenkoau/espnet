@@ -757,12 +757,14 @@ def snapshot_object(target, filename):
     return snapshot_object
 
 
-def torch_load(path, model):
+def torch_load(path, model, strict=True):
     """Load torch model states.
 
     Args:
         path (str): Model path or snapshot file path to be loaded.
         model (torch.nn.Module): Torch model.
+        strict (bool, optional): Whether to raise an error if there are missing or
+            unexpected keys in model state_dict.
 
     """
     if "snapshot" in os.path.basename(path):
@@ -773,9 +775,9 @@ def torch_load(path, model):
         model_state_dict = torch.load(path, map_location=lambda storage, loc: storage)
 
     if hasattr(model, "module"):
-        model.module.load_state_dict(model_state_dict)
+        model.module.load_state_dict(model_state_dict, strict=strict)
     else:
-        model.load_state_dict(model_state_dict)
+        model.load_state_dict(model_state_dict, strict=strict)
 
     del model_state_dict
 

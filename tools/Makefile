@@ -126,6 +126,10 @@ else
 	touch warp-transducer.done
 endif
 
+ctc-crf.done: pytorch.done conda_packages.done
+	. ./activate_python.sh && ./installers/install_ctc-crf.sh
+	touch ctc-crf.done
+
 chainer_ctc.done: chainer.done
 ifeq ($(strip $(CPU_ONLY)),)
 	[ -n "${CUDA_HOME}" ] || { echo -e "Error: CUDA_HOME is not set.\n    $$ . ./setup_cuda_env.sh <cuda-root>"; exit 1; }

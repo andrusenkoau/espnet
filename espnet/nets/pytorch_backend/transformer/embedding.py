@@ -7,6 +7,7 @@
 """Positional Encoding Module."""
 
 import math
+from typing import Optional
 import torch
 
 
@@ -29,6 +30,24 @@ def _pre_hook(
     k = prefix + "pe"
     if k in state_dict:
         state_dict.pop(k)
+
+
+class EmbedAdapter(torch.nn.Sequential):
+    """Torch.script adapter allowing the mask to bypass the sequential block."""
+
+    def __call__(self, x, mask: Optional[torch.Tensor] = None):
+        """Pass mask around Sequential forward.
+
+        Args:
+            x (torch.Tensor): Input tensor (batch, time, `*`).
+            mask (torch.Tensor): Mask (#batch, 1, time2) or (#batch, time1, time2).
+
+        Returns:
+            torch.Tensor: Encoded tensor (batch, time, `*`).
+
+        """
+        x = self.forward(x)
+        return x, mask
 
 
 class PositionalEncoding(torch.nn.Module):
@@ -58,7 +77,7 @@ class PositionalEncoding(torch.nn.Module):
         """Reset the positional encodings."""
         if self.pe is not None:
             if self.pe.size(1) >= x.size(1):
-                if self.pe.dtype != x.dtype or self.pe.device != x.device:
+                if self.pe.dtype != x.dtype or str(self.pe.device) != str(x.device):
                     self.pe = self.pe.to(dtype=x.dtype, device=x.device)
                 return
         pe = torch.zeros(x.size(1), self.d_model)

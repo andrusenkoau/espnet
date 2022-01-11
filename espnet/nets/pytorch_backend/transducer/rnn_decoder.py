@@ -8,6 +8,7 @@ from typing import Tuple
 from typing import Union
 
 import torch
+import torch.nn.functional as F
 
 from espnet.nets.transducer_decoder_interface import ExtendedHypothesis
 from espnet.nets.transducer_decoder_interface import Hypothesis

@@ -180,4 +180,30 @@ def add_arguments_transformer_common(group):
     group.add_argument(
         "--dunits", default=320, type=int, help="Number of decoder hidden units"
     )
+    # Chunk attention
+    group.add_argument(
+        "--use-chunk", default=False, type=strtobool, help="Use of chunk attention"
+    )
+    group.add_argument(
+        "--chunk-window", default=1, type=int, help="Chunk window size in frames"
+    )
+    group.add_argument(
+        "--chunk-left-context",
+        default=0,
+        type=int,
+        help="Chunk left context size in frames",
+    )
+    group.add_argument(
+        "--chunk-right-context",
+        default=0,
+        type=int,
+        help="Chunk right context size in frames",
+    )
+    # Checkpointing
+    group.add_argument(
+        "--grad-checkpointing",
+        type=strtobool,
+        default=False,
+        help="The flag to switch to use gradient checkpointing during training",
+    )
     return group

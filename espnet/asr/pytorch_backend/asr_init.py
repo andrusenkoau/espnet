@@ -196,17 +196,18 @@ def create_transducer_compatible_state_dict(
     return new_state_dict
 
 
-def load_trained_model(model_path, training=True):
+def load_trained_model(model_path, training=True, strict=True):
     """Load the trained model for recognition.
 
     Args:
         model_path (str): Path to model.***.best
         training (bool): Training mode specification for transducer model.
+        strict (bool, optional): Whether to raise an error if there are missing or
+            unexpected keys in model state_dict.
 
     Returns:
         model (torch.nn.Module): Trained model.
         train_args (Namespace): Trained model arguments.
-
     """
     idim, odim, train_args = get_model_conf(
         model_path, os.path.join(os.path.dirname(model_path), "model.json")
@@ -230,7 +231,7 @@ def load_trained_model(model_path, training=True):
         custom_torch_load(model_path, model, training=training)
     else:
         model = model_class(idim, odim, train_args)
-        torch_load(model_path, model)
+    torch_load(model_path, model, strict=strict)
 
     return model, train_args
 

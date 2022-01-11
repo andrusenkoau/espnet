@@ -1,6 +1,9 @@
 import logging
 from pathlib import Path
 import re
+from collections import defaultdict
+from pathlib import Path
+from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Optional
@@ -230,75 +233,151 @@ class G2p_en:
         return phones
 
 
-class G2pk:
-    """On behalf of g2pk.G2p.
+class Wrapper_LexiconG2p:
+    """On behalf of LexiconG2p.
 
-    g2pk.G2p isn't pickalable and it can't be copied to the other processes
+    LexiconG2p isn't pickalable and it can't be copied to the other processes
     via multiprocessing module.
-    As a workaround, g2pk.G2p is instantiated upon calling this class.
-
+    As a workaround, LexiconG2p is instantiated upon calling this class.
     """
 
     def __init__(
-        self, descritive=False, group_vowels=False, to_syl=False, no_space=False
+        self,
+        lexicon: Union[Path, str],
+        no_space: bool = True,
+        space_symbol: str = "<space>",
+        positional: Union[None, str] = None,
+        unk_word: str = "<unk>",
+        unk_phon: str = "<spn>",
     ):
-        self.descritive = descritive
-        self.group_vowels = group_vowels
-        self.to_syl = to_syl
+
+        self.lexicon = lexicon
         self.no_space = no_space
+        self.space_symbol = space_symbol
+        self.positional = positional
+        self.unk_word = unk_word
+        self.unk_phon = unk_phon
         self.g2p = None
 
-    def __call__(self, text) -> List[str]:
+    def __call__(self, text: str) -> List[str]:
         if self.g2p is None:
-            import g2pk
-
-            self.g2p = g2pk.G2p()
-
-        phones = list(
-            self.g2p(
-                text,
-                descriptive=self.descritive,
-                group_vowels=self.group_vowels,
-                to_syl=self.to_syl,
+            self.g2p = LexiconG2p(
+                self.lexicon,
+                self.no_space,
+                self.space_symbol,
+                self.positional,
+                self.unk_word,
+                self.unk_phon,
             )
+
+        return self.g2p(text)
+
+
+class LexiconG2p:
+    """G2p based on user-provided lexicon file."""
+
+    begin_positional_mark = "▁"
+    full_positional_begin_mark = "_B"
+    full_positional_end_mark = "_E"
+    full_positional_inner_mark = "_I"
+    full_positional_singular_mark = "_S"
+
+    def _apply_mark_strip(self, token):
+        return (
+            token.lstrip(self.begin_positional_mark)
+            if self.positional == "begin"
+            else token.replace(self.full_positional_begin_mark, "")
+            .replace(self.full_positional_end_mark, "")
+            .replace(self.full_positional_inner_mark, "")
+            .replace(self.full_positional_singular_mark, "")
         )
-        if self.no_space:
-            # remove space which represents word serapater
-            phones = list(filter(lambda s: s != " ", phones))
-        return phones
 
-
-class Jaso:
-    PUNC = "!'(),-.:;?"
-    SPACE = " "
-
-    JAMO_LEADS = "".join([chr(_) for _ in range(0x1100, 0x1113)])
-    JAMO_VOWELS = "".join([chr(_) for _ in range(0x1161, 0x1176)])
-    JAMO_TAILS = "".join([chr(_) for _ in range(0x11A8, 0x11C3)])
-
-    VALID_CHARS = JAMO_LEADS + JAMO_VOWELS + JAMO_TAILS + PUNC + SPACE
-
-    def __init__(self, space_symbol=" ", no_space=False):
-        self.space_symbol = space_symbol
+    def __init__(
+        self,
+        lexicon: Union[Path, str],
+        no_space: bool = True,
+        space_symbol: str = "<space>",
+        positional: Union[None, str] = None,
+        unk_word: str = "<unk>",
+        unk_phon: str = "<spn>",
+    ):
+        assert check_argument_types()
+        if positional is not None and positional != "begin" and positional != "full":
+            raise ValueError(
+                f"positional must be one of None, begin, or full: {positional}"
+            )
         self.no_space = no_space
+        self.space_symbol = space_symbol
+        self.positional = positional
+        self.unk_word = unk_word
+        self.unk_phon = unk_phon
+        self.g2p = defaultdict(lambda: [[self.unk_phon]])
+        self.p2g = defaultdict(lambda: [self.unk_word])
+        if isinstance(lexicon, str):
+            lexicon = Path(lexicon)
+        with lexicon.open("r", encoding="utf-8") as f:
+            for line in f:
+                word, trans = line.rstrip().split(" ", 1)
+                trans = trans.split()
+                # store all possible transcriptions
+                # in the order they are in the lexicon
+                self.g2p[word].insert(len(self.g2p[word]) - 1, trans)
+                # remove all positional marks.
+                # It should help in decoding.
+                trans = tuple([self._apply_mark_strip(t) for t in trans])
+                # store all possible words
+                # in the order they are in the lexicon
+                self.p2g[trans].insert(len(self.p2g[trans]) - 1, word)
 
-    def _text_to_jaso(self, line: str) -> List[str]:
-        jasos = list(jamo.hangul_to_jamo(line))
-        return jasos
+    def __call__(self, text: str) -> List[str]:
+        return self.encode(text)
 
-    def _remove_non_korean_characters(self, tokens):
-        new_tokens = [token for token in tokens if token in self.VALID_CHARS]
-        return new_tokens
+    def encode(self, text: str) -> List[str]:
+        # encode words with the first available transcription
+        words = text.rstrip().split()
+        trans = [] if self.no_space else [self.space_symbol]
+        for word in words:
+            trans += self.g2p[word][0]
+            if not self.no_space:
+                trans.append(self.space_symbol)
+        return trans
 
-    def __call__(self, text) -> List[str]:
-        graphemes = [x for x in self._text_to_jaso(text)]
-        graphemes = self._remove_non_korean_characters(graphemes)
-
+    def decode(self, tokens: Iterable[str]) -> str:
+        # decode transcriptions with the first available word
+        if self.no_space and self.positional is None or len(tokens) == 0:
+            return "".join(tokens)
+        word_tran = []
+        if self.no_space or tokens[0] != self.space_symbol:
+            word_tran.append(self._apply_mark_strip(tokens[0]))
+        word_trans = [word_tran]
         if self.no_space:
-            graphemes = list(filter(lambda s: s != " ", graphemes))
+            for token in tokens[1:]:
+                if (
+                    self.positional == "begin"
+                    and token.startswith(self.begin_positional_mark)
+                    or self.positional == "full"
+                    and (
+                        token.endswith(self.full_positional_begin_mark)
+                        or token.endswith(self.full_positional_singular_mark)
+                    )
+                ):
+                    word_tran = [self._apply_mark_strip(token)]
+                    word_trans.append(word_tran)
+                else:
+                    word_tran.append(self._apply_mark_strip(token))
         else:
-            graphemes = [x if x != " " else self.space_symbol for x in graphemes]
-        return graphemes
+            for token in tokens[1:]:
+                # suppose there are no space_symbols in word transcriptions
+                if token == self.space_symbol:
+                    word_tran = []
+                    word_trans.append(word_tran)
+                else:
+                    word_tran.append(self._apply_mark_strip(token))
+        words = []
+        for word_tran in word_trans:
+            if len(word_tran) > 0:
+                words.append(self.p2g[tuple(word_tran)][0])
+        return " ".join(words)
 
 
 class Phonemizer:
@@ -364,6 +443,8 @@ class PhonemeTokenizer(AbsTokenizer):
         non_linguistic_symbols: Union[Path, str, Iterable[str]] = None,
         space_symbol: str = "<space>",
         remove_non_linguistic_symbols: bool = False,
+        g2p_lexicon_path: Union[Path, str] = None,
+        g2p_lexicon_conf: Dict = None,
     ):
         assert check_argument_types()
         if g2p_type is None:
@@ -387,96 +468,19 @@ class PhonemeTokenizer(AbsTokenizer):
         elif g2p_type == "pypinyin_g2p_phone":
             self.g2p = pypinyin_g2p_phone
         elif g2p_type == "espeak_ng_arabic":
-            self.g2p = Phonemizer(
-                language="ar",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_german":
-            self.g2p = Phonemizer(
-                language="de",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_french":
-            self.g2p = Phonemizer(
-                language="fr-fr",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_spanish":
-            self.g2p = Phonemizer(
-                language="es",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_russian":
-            self.g2p = Phonemizer(
-                language="ru",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_greek":
-            self.g2p = Phonemizer(
-                language="el",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_finnish":
-            self.g2p = Phonemizer(
-                language="fi",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_hungarian":
-            self.g2p = Phonemizer(
-                language="hu",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_dutch":
-            self.g2p = Phonemizer(
-                language="nl",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "espeak_ng_hindi":
-            self.g2p = Phonemizer(
-                language="hi",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-            )
-        elif g2p_type == "g2pk":
-            self.g2p = G2pk(no_space=False)
-        elif g2p_type == "g2pk_no_space":
-            self.g2p = G2pk(no_space=True)
-        elif g2p_type == "espeak_ng_english_us_vits":
-            # VITS official implementation-like processing
-            # Reference: https://github.com/jaywalnut310/vits
-            self.g2p = Phonemizer(
-                language="en-us",
-                backend="espeak",
-                with_stress=True,
-                preserve_punctuation=True,
-                strip=True,
-                word_separator=" ",
-                phone_separator="",
-                split_by_single_token=True,
-            )
-        elif g2p_type == "korean_jaso":
-            self.g2p = Jaso(space_symbol=space_symbol, no_space=False)
-        elif g2p_type == "korean_jaso_no_space":
-            self.g2p = Jaso(no_space=True)
+            self.g2p = Phonemizer(language="ar", backend="espeak", with_stress=True)
+        elif g2p_type == "g2p_lexicon":
+            if g2p_lexicon_path is None:
+                raise ValueError(
+                    f"g2p_lexicon_path is required for g2p_lexicon g2p_type:"
+                    f" {g2p_lexicon_path}, {g2p_type}"
+                )
+            if space_symbol != g2p_lexicon_conf["space_symbol"]:
+                raise ValueError(
+                    f"space_symbol and g2p_lexicon_conf.space_symbol must match:"
+                    f" {space_symbol}, {g2p_lexicon_conf['space_symbol']}"
+                )
+            self.g2p = Wrapper_LexiconG2p(g2p_lexicon_path, **g2p_lexicon_conf)
         else:
             raise NotImplementedError(f"Not supported: g2p_type={g2p_type}")
 
@@ -525,4 +529,8 @@ class PhonemeTokenizer(AbsTokenizer):
 
     def tokens2text(self, tokens: Iterable[str]) -> str:
         # phoneme type is not invertible
-        return "".join(tokens)
+        return (
+            self.g2p.decode(tokens)
+            if self.g2p_type == "g2p_lexicon"
+            else "".join(tokens)
+        )

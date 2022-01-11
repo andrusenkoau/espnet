@@ -32,6 +32,8 @@ from espnet2.asr.encoder.hubert_encoder import FairseqHubertEncoder
 from espnet2.asr.encoder.hubert_encoder import FairseqHubertPretrainEncoder
 from espnet2.asr.encoder.rnn_encoder import RNNEncoder
 from espnet2.asr.encoder.transformer_encoder import TransformerEncoder
+from espnet2.asr.encoder.conv_transformer_encoder import ConvTransformerEncoder
+from espnet2.asr.encoder.conv_conformer_encoder import ConvConformerEncoder
 from espnet2.asr.encoder.contextual_block_transformer_encoder import (
     ContextualBlockTransformerEncoder,  # noqa: H301
 )
@@ -40,6 +42,7 @@ from espnet2.asr.encoder.contextual_block_conformer_encoder import (
 )
 from espnet2.asr.encoder.vgg_rnn_encoder import VGGRNNEncoder
 from espnet2.asr.encoder.wav2vec2_encoder import FairSeqWav2Vec2Encoder
+from espnet2.asr.encoder.wav2vec2_transformer_encoder import FairSeqWav2Vec2TransformerEncoder
 from espnet2.asr.espnet_model import ESPnetASRModel
 from espnet2.asr.frontend.abs_frontend import AbsFrontend
 from espnet2.asr.frontend.default import DefaultFrontend
@@ -61,7 +64,10 @@ from espnet2.layers.abs_normalize import AbsNormalize
 from espnet2.layers.global_mvn import GlobalMVN
 from espnet2.layers.utterance_mvn import UtteranceMVN
 from espnet2.tasks.abs_task import AbsTask
-from espnet2.text.phoneme_tokenizer import g2p_choices
+# <<<<<<< master
+# from espnet2.text.phoneme_tokenizer import g2p_choices
+# =======
+from espnet2.text.phoneme_tokenizer import LexiconG2p
 from espnet2.torch_utils.initialize import initialize
 from espnet2.train.class_choices import ClassChoices
 from espnet2.train.collate_fn import CommonCollateFn
@@ -99,7 +105,7 @@ normalize_choices = ClassChoices(
         utterance_mvn=UtteranceMVN,
     ),
     type_check=AbsNormalize,
-    default="utterance_mvn",
+    default=None,
     optional=True,
 )
 preencoder_choices = ClassChoices(
@@ -117,6 +123,8 @@ encoder_choices = ClassChoices(
     classes=dict(
         conformer=ConformerEncoder,
         transformer=TransformerEncoder,
+        conv_transformer=ConvTransformerEncoder,
+        conv_conformer=ConvConformerEncoder,
         contextual_block_transformer=ContextualBlockTransformerEncoder,
         contextual_block_conformer=ContextualBlockConformerEncoder,
         vgg_rnn=VGGRNNEncoder,
@@ -226,6 +234,12 @@ class ASRTask(AbsTask):
             action=NestedDictAction,
             default=None,
             help="The keyword arguments for joint network class.",
+
+        group.add_argument(  
+            "--token_lm_path",
+            type=str_or_none,
+            default=None,
+            help="Token lm path for sd loss",
         )
         group.add_argument(
             "--model_conf",
@@ -254,6 +268,25 @@ class ASRTask(AbsTask):
             default=None,
             help="The model file of sentencepiece",
         )
+        group.add_argument(
+            "--bpe_alpha",
+            type=float,
+            default=0.0,
+            help="(Smoothing parameter for unigram [0.0, inf])"
+            " or (BPE dropout probability for bpe [0.0, 1.0])",
+        )
+        group.add_argument(
+            "--replace_position_mark",
+            type=str_or_none,
+            default=None,
+            help="Replace Sentencepieces position mark '▁' with a user-defined string",
+        )
+        group.add_argument(
+            "--unk_symbol",
+            type=str,
+            default="<unk>",
+            help="Unknown symbol in token_list",
+        )
         parser.add_argument(
             "--non_linguistic_symbols",
             type=str_or_none,
@@ -269,9 +302,24 @@ class ASRTask(AbsTask):
         parser.add_argument(
             "--g2p",
             type=str_or_none,
-            choices=g2p_choices,
+# <<<<<<< master
+#             choices=g2p_choices,
+# =======
+            choices=[None, "g2p_en", "pyopenjtalk", "pyopenjtalk_kana", "g2p_lexicon"],
             default=None,
             help="Specify g2p method if --token_type=phn",
+        )
+        parser.add_argument(
+            "--g2p_lexicon_path",
+            type=str_or_none,
+            default=None,
+            help="Lexicon path for lexicon-based g2p",
+        )
+        parser.add_argument(
+            "--g2p_lexicon_conf",
+            action=NestedDictAction,
+            default=get_default_kwargs(LexiconG2p),
+            help="The keyword arguments for LexiconG2p class.",
         )
         parser.add_argument(
             "--speech_volume_normalize",
@@ -337,9 +385,14 @@ class ASRTask(AbsTask):
                 token_type=args.token_type,
                 token_list=args.token_list,
                 bpemodel=args.bpemodel,
+                bpe_alpha=args.bpe_alpha,
+                replace_position_mark=args.replace_position_mark,
                 non_linguistic_symbols=args.non_linguistic_symbols,
                 text_cleaner=args.cleaner,
                 g2p_type=args.g2p,
+                unk_symbol=args.unk_symbol,
+                g2p_lexicon_path=args.g2p_lexicon_path,
+                g2p_lexicon_conf=args.g2p_lexicon_conf,
                 # NOTE(kamo): Check attribute existence for backward compatibility
                 rir_scp=args.rir_scp if hasattr(args, "rir_scp") else None,
                 rir_apply_prob=args.rir_apply_prob
@@ -475,7 +528,13 @@ class ASRTask(AbsTask):
 
         # 6. CTC
         ctc = CTC(
-            odim=vocab_size, encoder_output_sizse=encoder_output_size, **args.ctc_conf
+# <<<<<<< master
+#             odim=vocab_size, encoder_output_sizse=encoder_output_size, **args.ctc_conf
+# =======
+            odim=vocab_size,
+            encoder_output_size=encoder.output_size(),
+            token_lm_path=args.token_lm_path,
+            **args.ctc_conf,
         )
 
         # 8. Build model
