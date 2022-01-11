@@ -62,7 +62,8 @@ class CTC(torch.nn.Module):
 
             if ignore_nan_grad:
                 logging.warning("ignore_nan_grad option is not supported for warp_ctc")
-            self.ctc_loss = warp_ctc.CTCLoss(size_average=False, reduce=False)
+            self.ctc_loss = warp_ctc.CTCLoss(size_average=True, reduce=reduce)
+
         elif self.ctc_type == "sd":
             from espnet2.asr.k2.sd import SDLoss
             with open(self.token_lm_path, encoding='utf-8') as fn:
@@ -75,6 +76,7 @@ class CTC(torch.nn.Module):
                                 topo_type=self.ctc_topo_type,
                                 token_lm=token_lm,
                                 intersect_pruned=False
+
             )
         else:
             raise NotImplementedError
@@ -160,6 +162,12 @@ class CTC(torch.nn.Module):
             th_ilen = th_ilen.cpu().int()
             th_olen = th_olen.cpu().int()
             loss = self.ctc_loss(th_pred, th_target, th_ilen, th_olen)
+            if self.reduce:
+                # NOTE: sum() is needed to keep consistency since warpctc
+                # return as tensor w/ shape (1,)
+                # but builtin return as tensor w/o shape (scalar).
+                loss = loss.sum()
+            return loss
 
         elif self.ctc_type == "sd":    
             # (L, B, D) -> (B, L, D)
@@ -217,8 +225,6 @@ class CTC(torch.nn.Module):
         """
         # hs_pad: (B, L, NProj) -> ys_hat: (B, L, Nvocab)
         ys_hat = self.ctc_lo(F.dropout(hs_pad, p=self.dropout_rate))
-        # ys_hat: (B, L, D) -> (L, B, D)
-        ys_hat = ys_hat.transpose(0, 1)
 
         # (B, L) -> (BxL,)
         if self.ctc_type != "sd":

@@ -88,6 +88,24 @@ class E2E(ASRInterface, torch.nn.Module):
 
         if args.transformer_attn_dropout_rate is None:
             args.transformer_attn_dropout_rate = args.dropout_rate
+
+        self.adim = args.adim  # used for CTC (equal to d_model)
+        self.mtlalpha = args.mtlalpha
+
+        if args.mtlalpha > 0.0:
+            self.ctc = CTC(
+                odim, args.adim, args.dropout_rate, ctc_type=args.ctc_type, reduce=True
+            )
+        else:
+            self.ctc = None
+
+        self.intermediate_ctc_weight = args.intermediate_ctc_weight
+        self.intermediate_ctc_layers = []
+        if args.intermediate_ctc_layer != "":
+            self.intermediate_ctc_layers = [
+                int(i) for i in args.intermediate_ctc_layer.split(",")
+            ]
+
         self.encoder = Encoder(
             idim=idim,
             selfattention_layer_type=args.transformer_encoder_selfattn_layer_type,
@@ -102,6 +120,12 @@ class E2E(ASRInterface, torch.nn.Module):
             dropout_rate=args.dropout_rate,
             positional_dropout_rate=args.dropout_rate,
             attention_dropout_rate=args.transformer_attn_dropout_rate,
+# <<<<<<< master
+#             stochastic_depth_rate=args.stochastic_depth_rate,
+#             intermediate_layers=self.intermediate_ctc_layers,
+#             ctc_softmax=self.ctc.softmax if args.self_conditioning else None,
+#             conditioning_layer_dim=odim,
+# =======
             use_chunk=args.use_chunk,
             chunk_window=args.chunk_window,
             chunk_left_context=args.chunk_left_context,
@@ -143,14 +167,6 @@ class E2E(ASRInterface, torch.nn.Module):
         self.reporter = Reporter()
 
         self.reset_parameters(args)
-        self.adim = args.adim  # used for CTC (equal to d_model)
-        self.mtlalpha = args.mtlalpha
-        if args.mtlalpha > 0.0:
-            self.ctc = CTC(
-                odim, args.adim, args.dropout_rate, ctc_type=args.ctc_type, reduce=True
-            )
-        else:
-            self.ctc = None
 
         if args.report_cer or args.report_wer:
             self.error_calculator = ErrorCalculator(
@@ -187,7 +203,7 @@ class E2E(ASRInterface, torch.nn.Module):
         # 1. forward encoder
         xs_pad = xs_pad[:, : max(ilens)]  # for data parallel
         src_mask = make_non_pad_mask(ilens.tolist()).to(xs_pad.device).unsqueeze(-2)
-        hs_pad, hs_mask = self.encoder(xs_pad, src_mask)
+        hs_pad, hs_mask, hs_intermediates = self.encoder(xs_pad, src_mask)
         self.hs_pad = hs_pad
 
         # 2. forward decoder
@@ -211,6 +227,7 @@ class E2E(ASRInterface, torch.nn.Module):
         # TODO(karita) show predicted text
         # TODO(karita) calculate these stats
         cer_ctc = None
+        loss_intermediate_ctc = 0.0
         if self.mtlalpha == 0.0:
             loss_ctc = None
         else:
@@ -223,6 +240,16 @@ class E2E(ASRInterface, torch.nn.Module):
             # for visualization
             if not self.training:
                 self.ctc.softmax(hs_pad)
+
+            if self.intermediate_ctc_weight > 0 and self.intermediate_ctc_layers:
+                for hs_intermediate in hs_intermediates:
+                    # assuming hs_intermediates and hs_pad has same length / padding
+                    loss_inter = self.ctc(
+                        hs_intermediate.view(batch_size, -1, self.adim), hs_len, ys_pad
+                    )
+                    loss_intermediate_ctc += loss_inter
+
+                loss_intermediate_ctc /= len(self.intermediate_ctc_layers)
 
         # 5. compute cer/wer
         if self.training or self.error_calculator is None or self.decoder is None:
@@ -239,10 +266,20 @@ class E2E(ASRInterface, torch.nn.Module):
             loss_ctc_data = None
         elif alpha == 1:
             self.loss = loss_ctc
+            if self.intermediate_ctc_weight > 0:
+                self.loss = (
+                    1 - self.intermediate_ctc_weight
+                ) * loss_ctc + self.intermediate_ctc_weight * loss_intermediate_ctc
             loss_att_data = None
             loss_ctc_data = float(loss_ctc)
         else:
             self.loss = alpha * loss_ctc + (1 - alpha) * loss_att
+            if self.intermediate_ctc_weight > 0:
+                self.loss = (
+                    (1 - alpha - self.intermediate_ctc_weight) * loss_att
+                    + alpha * loss_ctc
+                    + self.intermediate_ctc_weight * loss_intermediate_ctc
+                )
             loss_att_data = float(loss_att)
             loss_ctc_data = float(loss_ctc)
 
@@ -456,7 +493,7 @@ class E2E(ASRInterface, torch.nn.Module):
 
             # add eos in the final loop to avoid that there are no ended hyps
             if i == maxlen - 1:
-                logging.info("adding <eos> in the last postion in the loop")
+                logging.info("adding <eos> in the last position in the loop")
                 for hyp in hyps:
                     hyp["yseq"].append(self.eos)
 

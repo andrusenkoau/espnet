@@ -42,7 +42,7 @@ class Encoder(torch.nn.Module):
 
     Args:
         idim (int): Input dimension.
-        attention_dim (int): Dimention of attention.
+        attention_dim (int): Dimension of attention.
         attention_heads (int): The number of heads of multi head attention.
         linear_units (int): The number of units of position-wise feed forward.
         num_blocks (int): The number of decoder blocks.
@@ -65,6 +65,11 @@ class Encoder(torch.nn.Module):
         zero_triu (bool): Whether to zero the upper triangular part of attention matrix.
         cnn_module_kernel (int): Kernerl size of convolution module.
         padding_idx (int): Padding idx for input_layer=embed.
+        stochastic_depth_rate (float): Maximum probability to skip the encoder layer.
+        intermediate_layers (Union[List[int], None]): indices of intermediate CTC layer.
+            indices start from 1.
+            if not None, intermediate outputs are returned (which changes return type
+            signature.)
 
     """
 
@@ -91,11 +96,13 @@ class Encoder(torch.nn.Module):
         zero_triu=False,
         cnn_module_kernel=31,
         padding_idx=-1,
+
         use_chunk=False,
         chunk_window=1,
         chunk_left_context=0,
         chunk_right_context=0,
         use_checkpointing=False,
+
     ):
         """Construct an Encoder object."""
         super(Encoder, self).__init__()
@@ -227,17 +234,27 @@ class Encoder(torch.nn.Module):
                 dropout_rate,
                 normalize_before,
                 concat_after,
+                stochastic_depth_rate * float(1 + lnum) / num_blocks,
             ),
             use_checkpointing,
         )
         if self.normalize_before:
             self.after_norm = LayerNorm(attention_dim)
 
+        self.intermediate_layers = intermediate_layers
+        self.use_conditioning = True if ctc_softmax is not None else False
+        if self.use_conditioning:
+            self.ctc_softmax = ctc_softmax
+            self.conditioning_layer = torch.nn.Linear(
+                conditioning_layer_dim, attention_dim
+            )
+            
         # chunk attention attributes:
         self.use_chunk = use_chunk
         self.chunk_window = chunk_window
         self.chunk_left_context = chunk_left_context
         self.chunk_right_context = chunk_right_context
+
 
     def forward(self, xs, masks):
         """Encode input sequence.
@@ -279,7 +296,6 @@ class Encoder(torch.nn.Module):
         if self.normalize_before:
             xs = self.after_norm(xs)
 
-        # we do not want to pass chunked encoder_masks further
         return xs, masks
 
     def scripting_prep(self):

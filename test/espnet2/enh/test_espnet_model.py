@@ -8,18 +8,29 @@ from espnet2.enh.decoder.stft_decoder import STFTDecoder
 from espnet2.enh.encoder.conv_encoder import ConvEncoder
 from espnet2.enh.encoder.stft_encoder import STFTEncoder
 from espnet2.enh.espnet_model import ESPnetEnhancementModel
+from espnet2.enh.loss.criterions.tf_domain import FrequencyDomainL1
+from espnet2.enh.loss.criterions.tf_domain import FrequencyDomainMSE
+from espnet2.enh.loss.criterions.time_domain import SISNRLoss
+from espnet2.enh.loss.wrappers.fixed_order import FixedOrderSolver
+from espnet2.enh.loss.wrappers.pit_solver import PITSolver
 from espnet2.enh.separator.dprnn_separator import DPRNNSeparator
 from espnet2.enh.separator.neural_beamformer import NeuralBeamformer
 from espnet2.enh.separator.rnn_separator import RNNSeparator
 from espnet2.enh.separator.tcn_separator import TCNSeparator
 from espnet2.enh.separator.transformer_separator import TransformerSeparator
 
-is_torch_1_2_plus = LooseVersion(torch.__version__) >= LooseVersion("1.2.0")
+is_torch_1_9_plus = LooseVersion(torch.__version__) >= LooseVersion("1.9.0")
 
 
 stft_encoder = STFTEncoder(
     n_fft=28,
     hop_length=16,
+)
+
+stft_encoder_bultin_complex = STFTEncoder(
+    n_fft=28,
+    hop_length=16,
+    use_builtin_complex=True,
 )
 
 stft_decoder = STFTDecoder(
@@ -65,65 +76,37 @@ transformer_separator = TransformerSeparator(
 )
 
 
+si_snr_loss = SISNRLoss()
+tf_mse_loss = FrequencyDomainMSE()
+tf_l1_loss = FrequencyDomainL1()
+
+pit_wrapper = PITSolver(criterion=si_snr_loss)
+fix_order_solver = FixedOrderSolver(criterion=tf_mse_loss)
+
+
 @pytest.mark.parametrize(
-    "encoder, decoder", [(stft_encoder, stft_decoder), (conv_encoder, conv_decoder)]
+    "encoder, decoder",
+    [
+        (stft_encoder, stft_decoder),
+        (stft_encoder_bultin_complex, stft_decoder),
+        (conv_encoder, conv_decoder),
+    ],
 )
 @pytest.mark.parametrize(
     "separator", [rnn_separator, dprnn_separator, tcn_separator, transformer_separator]
 )
-@pytest.mark.parametrize(
-    "loss_type",
-    ["si_snr", "ci_sdr", "mask_mse", "magnitude", "spectrum", "spectrum_log"],
-)
-@pytest.mark.parametrize("stft_consistency", [True, False])
-@pytest.mark.parametrize("mask_type", ["IBM", "IRM", "IAM", "PSM", "NPSM", "PSM^2"])
 @pytest.mark.parametrize("training", [True, False])
-def test_single_channel_model(
-    encoder, decoder, separator, stft_consistency, loss_type, mask_type, training
-):
-    if not is_torch_1_2_plus:
-        pytest.skip("Pytorch Version Under 1.2 is not supported for Enh task")
-
-    if loss_type == "ci_sdr":
-        inputs = torch.randn(2, 300)
-        ilens = torch.LongTensor([300, 200])
-        speech_refs = [torch.randn(2, 300).float(), torch.randn(2, 300).float()]
-    else:
-        # ci_sdr will fail if length is too short
-        inputs = torch.randn(2, 100)
-        ilens = torch.LongTensor([100, 80])
-        speech_refs = [torch.randn(2, 100).float(), torch.randn(2, 100).float()]
-
-    if loss_type not in ["si_snr", "ci_sdr"] and isinstance(encoder, ConvEncoder):
-        with pytest.raises(TypeError):
-            enh_model = ESPnetEnhancementModel(
-                encoder=encoder,
-                separator=separator,
-                decoder=decoder,
-                stft_consistency=stft_consistency,
-                loss_type=loss_type,
-                mask_type=mask_type,
-            )
-        return
-    if stft_consistency and loss_type in ["mask_mse", "si_snr", "ci_sdr"]:
-        with pytest.raises(ValueError):
-            enh_model = ESPnetEnhancementModel(
-                encoder=encoder,
-                separator=separator,
-                decoder=decoder,
-                stft_consistency=stft_consistency,
-                loss_type=loss_type,
-                mask_type=mask_type,
-            )
-        return
+@pytest.mark.parametrize("loss_wrappers", [[pit_wrapper, fix_order_solver]])
+def test_single_channel_model(encoder, decoder, separator, training, loss_wrappers):
+    inputs = torch.randn(2, 300)
+    ilens = torch.LongTensor([300, 200])
+    speech_refs = [torch.randn(2, 300).float(), torch.randn(2, 300).float()]
 
     enh_model = ESPnetEnhancementModel(
         encoder=encoder,
         separator=separator,
         decoder=decoder,
-        stft_consistency=stft_consistency,
-        loss_type=loss_type,
-        mask_type=mask_type,
+        loss_wrappers=loss_wrappers,
     )
 
     if training:
@@ -182,37 +165,38 @@ random_speech = torch.tensor(
 )
 
 
+pit_wrapper = PITSolver(criterion=FrequencyDomainMSE(compute_on_mask=True))
+
+
 @pytest.mark.parametrize("training", [True, False])
 @pytest.mark.parametrize("mask_type", ["IBM", "IRM", "IAM", "PSM", "PSM^2"])
 @pytest.mark.parametrize(
     "loss_type", ["mask_mse", "magnitude", "spectrum", "spectrum_log"]
 )
 @pytest.mark.parametrize("num_spk", [1, 2, 3])
-@pytest.mark.parametrize("use_noise_mask", [True, False])
-@pytest.mark.parametrize("stft_consistency", [True, False])
+@pytest.mark.parametrize("use_builtin_complex", [True, False])
+@pytest.mark.parametrize("loss_wrappers", [[pit_wrapper]])
 def test_forward_with_beamformer_net(
-    training, mask_type, loss_type, num_spk, use_noise_mask, stft_consistency
+    training, mask_type, loss_type, num_spk, use_builtin_complex, loss_wrappers
 ):
-    if not is_torch_1_2_plus:
-        pytest.skip("Pytorch Version Under 1.2 is not supported for Enh task")
-
     # Skip some testing cases
     if not loss_type.startswith("mask") and mask_type != "IBM":
         # `mask_type` has no effect when `loss_type` is not "mask..."
         return
+    if not is_torch_1_9_plus and use_builtin_complex:
+        # builtin complex support is only available in PyTorch 1.8+
+        return
 
-    ch = 2
+    ch = 3
     inputs = random_speech[..., :ch].float()
     ilens = torch.LongTensor([16, 12])
     speech_refs = [torch.randn(2, 16, ch).float() for spk in range(num_spk)]
     noise_ref1 = torch.randn(2, 16, ch, dtype=torch.float)
     dereverb_ref1 = torch.randn(2, 16, ch, dtype=torch.float)
-    encoder = STFTEncoder(n_fft=8, hop_length=2)
+    encoder = STFTEncoder(
+        n_fft=8, hop_length=2, use_builtin_complex=use_builtin_complex
+    )
     decoder = STFTDecoder(n_fft=8, hop_length=2)
-
-    if stft_consistency and loss_type in ["mask_mse", "si_snr", "ci_sdr"]:
-        # skip this condition
-        return
 
     beamformer = NeuralBeamformer(
         input_dim=5,
@@ -230,27 +214,21 @@ def test_forward_with_beamformer_net(
         bprojs=2,
         badim=2,
         ref_channel=0,
-        use_noise_mask=use_noise_mask,
+        use_noise_mask=False,
         beamformer_type="mvdr_souden",
     )
     enh_model = ESPnetEnhancementModel(
         encoder=encoder,
         decoder=decoder,
         separator=beamformer,
-        stft_consistency=stft_consistency,
         loss_type=loss_type,
         mask_type=mask_type,
+        loss_wrappers=loss_wrappers,
     )
     if training:
         enh_model.train()
-        if stft_consistency and not is_torch_1_2_plus:
-            # torchaudio.functional.istft is only available with pytorch 1.2+
-            return
     else:
         enh_model.eval()
-        if not is_torch_1_2_plus:
-            # torchaudio.functional.istft is only available with pytorch 1.2+
-            return
 
     kwargs = {
         "speech_mix": inputs,

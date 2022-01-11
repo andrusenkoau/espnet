@@ -111,6 +111,7 @@ def pad_list(xs, pad_value):
     return pad
 
 
+
 def make_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = -1):
     """Make mask tensor containing indices of padded part.
 
@@ -130,7 +131,7 @@ def make_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = 
         With only lengths.
 
         >>> lengths = [5, 3, 2]
-        >>> make_non_pad_mask(lengths)
+        >>> make_pad_mask(lengths)
         masks = [[0, 0, 0, 0 ,0],
                  [0, 0, 0, 1, 1],
                  [0, 0, 1, 1, 1]]
@@ -200,6 +201,7 @@ def make_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = 
     if length_dim == 0:
         raise ValueError("length_dim cannot be 0: {}".format(length_dim))
 
+
     if isinstance(lengths, torch.Tensor):
         lengths = lengths.clone().detach().cpu()
     elif isinstance(lengths, list):
@@ -210,7 +212,8 @@ def make_pad_mask(lengths, xs: Optional[torch.Tensor] = None, length_dim: int = 
     if xs is None:
         maxlen = int(lengths.max())
     else:
-        maxlen = xs.size(length_dim)
+        assert xs is None
+        assert maxlen >= int(max(lengths))
 
     seq_range = torch.arange(0, maxlen, dtype=torch.int64)
     seq_range_expand = seq_range.unsqueeze(0).expand(bs, maxlen)

@@ -65,6 +65,7 @@ def build_tokenizer(
             g2p_lexicon_path=g2p_lexicon_path,
             g2p_lexicon_conf=g2p_lexicon_conf,
         )
+
     else:
         raise ValueError(
             f"token_mode must be one of bpe, word, char or phn: " f"{token_type}"
