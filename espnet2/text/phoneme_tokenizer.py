@@ -11,7 +11,6 @@ from typing import Union
 import warnings
 
 import g2p_en
-import jamo
 from typeguard import check_argument_types
 
 from espnet2.text.abs_tokenizer import AbsTokenizer

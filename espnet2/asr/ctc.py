@@ -125,11 +125,11 @@ class CTC(torch.nn.Module):
                         " Returning nan value instead of CTC loss"
                     )
                 elif size != th_pred.size(1):
-                    logging.warning(
-                        f"{th_pred.size(1) - size}/{th_pred.size(1)}"
-                        " samples got nan grad."
-                        " These were ignored for CTC loss."
-                    )
+                    #logging.warning(
+                    #    f"{th_pred.size(1) - size}/{th_pred.size(1)}"
+                    #    " samples got nan grad."
+                    #    " These were ignored for CTC loss."
+                    #)
 
                     # Create mask for target
                     target_mask = torch.full(
@@ -171,7 +171,7 @@ class CTC(torch.nn.Module):
 
         elif self.ctc_type == "sd":    
             # (L, B, D) -> (B, L, D)
-            th_pred = th_pred.transpose(0, 1)
+            #th_pred = th_pred.transpose(0, 1)
             loss = self.ctc_loss(
                             log_probs=th_pred,
                             targets=th_target,
@@ -226,8 +226,10 @@ class CTC(torch.nn.Module):
         # hs_pad: (B, L, NProj) -> ys_hat: (B, L, Nvocab)
         ys_hat = self.ctc_lo(F.dropout(hs_pad, p=self.dropout_rate))
 
-        # (B, L) -> (BxL,)
         if self.ctc_type != "sd":
+            # ys_hat: (B, L, D) -> (L, B, D)
+            ys_hat = ys_hat.transpose(0, 1)
+            # (B, L) -> (BxL,)
             ys_true = torch.cat([ys_pad[i, :l] for i, l in enumerate(ys_lens)])
         else:
             ys_true = ys_pad

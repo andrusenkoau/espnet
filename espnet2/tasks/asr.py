@@ -215,14 +215,12 @@ class ASRTask(AbsTask):
                 None,
             ],
         )
-
         group.add_argument(
             "--input_size",
             type=int_or_none,
             default=None,
             help="The number of input dimension of the feature",
         )
-
         group.add_argument(
             "--ctc_conf",
             action=NestedDictAction,
@@ -234,7 +232,7 @@ class ASRTask(AbsTask):
             action=NestedDictAction,
             default=None,
             help="The keyword arguments for joint network class.",
-
+        )
         group.add_argument(  
             "--token_lm_path",
             type=str_or_none,
@@ -247,7 +245,6 @@ class ASRTask(AbsTask):
             default=get_default_kwargs(ESPnetASRModel),
             help="The keyword arguments for model class.",
         )
-
         group = parser.add_argument_group(description="Preprocess related")
         group.add_argument(
             "--use_preprocessor",
@@ -302,9 +299,6 @@ class ASRTask(AbsTask):
         parser.add_argument(
             "--g2p",
             type=str_or_none,
-# <<<<<<< master
-#             choices=g2p_choices,
-# =======
             choices=[None, "g2p_en", "pyopenjtalk", "pyopenjtalk_kana", "g2p_lexicon"],
             default=None,
             help="Specify g2p method if --token_type=phn",
