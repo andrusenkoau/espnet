@@ -8,6 +8,7 @@
 
 import math
 from typing import Optional
+from typing import List
 
 import torch
 from torch import nn
@@ -284,10 +285,13 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
             torch.Tensor: Output tensor.
 
         """
-        zero_pad = torch.zeros((*x.size()[:3], 1), device=x.device, dtype=x.dtype)
+        #zero_pad = torch.zeros((*x.size()[:3], 1), device=x.device, dtype=x.dtype)
+        x_size = x.size()
+        zero_pad = torch.zeros(x_size[:3] + (1,), device=x.device, dtype=x.dtype)
         x_padded = torch.cat([zero_pad, x], dim=-1)
 
-        x_padded = x_padded.view(*x.size()[:2], x.size(3) + 1, x.size(2))
+        #x_padded = x_padded.view(*x.size()[:2], x.size(3) + 1, x.size(2))
+        x_padded = x_padded.view(x_size[:2] + (x_size[3] + 1, x_size[2]))
         x = x_padded[:, :, 1:].view_as(x)[
             :, :, :, : x.size(-1) // 2 + 1
         ]  # only keep the positions from 0 to time2
@@ -304,7 +308,8 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
         key,
         value,
         mask: Optional[torch.Tensor] = None,
-        pos_emb: Optional[torch.Tensor] = None):
+        pos_emb: Optional[torch.Tensor] = None,
+    ):
         """Compute 'Scaled Dot Product Attention' with rel. positional encoding.
 
         Args:
@@ -320,6 +325,13 @@ class RelPositionMultiHeadedAttention(MultiHeadedAttention):
             torch.Tensor: Output tensor (#batch, time1, d_model).
 
         """
+        if pos_emb is None:
+            # perform MultiHeadedAttention if no pos_emb provided
+            # can't call directly from super because of jit
+            return self.forward_impl(query, key, value, mask)
+        else:
+            pos_emb = pos_emb.to(query.dtype)
+
         q, k, v = self.forward_qkv(query, key, value)
         q = q.transpose(1, 2)  # (batch, time1, head, d_k)
 

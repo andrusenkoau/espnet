@@ -215,7 +215,7 @@ class RelPositionalEncoding(torch.nn.Module):
             # self.pe contains both positive and negative parts
             # the length of self.pe is 2 * input_len - 1
             if self.pe.size(1) >= x.size(1) * 2 - 1:
-                if self.pe.dtype != x.dtype or self.pe.device != x.device:
+                if self.pe.dtype != x.dtype or str(self.pe.device) != str(x.device):
                     self.pe = self.pe.to(dtype=x.dtype, device=x.device)
                 return
         # Suppose `i` means to the position of query vecotr and `j` means the
