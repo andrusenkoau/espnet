@@ -312,7 +312,8 @@ class ConformerEncoder(AbsEncoder):
         masks = (~make_pad_mask(ilens)[:, None, :]).to(xs_pad.device)
 
         # chunk-attention part
-        if self.use_chunk and self.chunk_left_context > 0:
+        # if self.use_chunk and self.chunk_left_context > 0:
+        if self.use_chunk:
             batch_size = xs_pad.shape[0]
             seq_len = xs_pad.shape[1]
             encoder_mask = chunk_attention_mask(
