@@ -68,7 +68,7 @@ class EncoderLayer(nn.Module):
             self.ff_scale = 1.0
         if self.conv_module is not None:
             self.norm_conv = LayerNorm(size)  # for the CNN module
-            self.norm_final = LayerNorm(size)  # for the final output of the block
+#            self.norm_final = LayerNorm(size)  # for the final output of the block
         self.dropout = nn.Dropout(dropout_rate)
         self.size = size
         self.normalize_before = normalize_before

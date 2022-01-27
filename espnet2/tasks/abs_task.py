@@ -285,6 +285,20 @@ class AbsTask(ABC):
         parser.set_defaults(required=["output_dir"])
 
         group = parser.add_argument_group("Common configuration")
+        
+        group.add_argument(
+            "--slurm",
+            type=str2bool,
+            default=False,
+            help="Perform training process with slurm",
+        )
+        
+        group.add_argument(
+            "--epochs_per_process",
+            type=int,
+            default=1,
+            help="The number of epochs per 1 process in slurm training mode",
+        )
 
         group.add_argument(
             "--print_config",
