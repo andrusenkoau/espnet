@@ -263,7 +263,7 @@ class Trainer:
         start_time = time.perf_counter()
 
         if trainer_options.slurm:
-            end_epoch = start_epoch + trainer_options.epochs_per_process
+            end_epoch = min(start_epoch + trainer_options.epochs_per_process, trainer_options.max_epoch + 1)
         else:
             end_epoch = trainer_options.max_epoch + 1
 
