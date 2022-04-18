@@ -36,7 +36,7 @@ class MultiHeadedAttention(nn.Module):
         self.linear_v = nn.Linear(n_feat, n_feat)
         self.linear_out = nn.Linear(n_feat, n_feat)
         # type error in old pytorch versions if scripting
-        self.attn = torch.empty(0)
+        #self.attn = torch.empty(0) # UB for multithreading
         self.dropout = nn.Dropout(p=dropout_rate)
         # finfo operator not bound into JIT
         # https://github.com/pytorch/pytorch/issues/25661
@@ -87,13 +87,13 @@ class MultiHeadedAttention(nn.Module):
             mask = mask.unsqueeze(1).eq(0)  # (batch, 1, *, time2)
             min_value = self.min_values[scores.dtype]
             scores = scores.masked_fill(mask, min_value)
-            self.attn = torch.softmax(scores, dim=-1).masked_fill(
+            attn = torch.softmax(scores, dim=-1).masked_fill(
                 mask, 0.0
             )  # (batch, head, time1, time2)
         else:
-            self.attn = torch.softmax(scores, dim=-1)  # (batch, head, time1, time2)
+            attn = torch.softmax(scores, dim=-1)  # (batch, head, time1, time2)
 
-        p_attn = self.dropout(self.attn)
+        p_attn = self.dropout(attn)
         x = torch.matmul(p_attn, value)  # (batch, head, time1, d_k)
         x = (
             x.transpose(1, 2).contiguous().view(n_batch, -1, self.h * self.d_k)
