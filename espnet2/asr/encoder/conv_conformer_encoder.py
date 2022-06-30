@@ -110,6 +110,7 @@ class ConvConformerEncoder(AbsEncoder):
         pos_enc_class = RelPositionalEncoding
         self.min_subsampling_length = 8
 
+
         # first block -- conv + MHA:
         self.conv1 = torch.nn.Sequential(
             nn.Conv2d(1, conv1_filters, kernel_size=(3,7), stride=(2,2), padding=(1,3)),
@@ -133,7 +134,7 @@ class ConvConformerEncoder(AbsEncoder):
                 output_size,
                 encoder_selfattn_layer_1(*encoder_selfattn_layer_args),
                 positionwise_layer_1(*positionwise_layer_args),
-                positionwise_layer(*positionwise_layer_args) if macaron_style else None,
+                positionwise_layer_1(*positionwise_layer_args) if macaron_style else None,
                 convolution_layer_1(*convolution_layer_args) if use_cnn_module else None,
                 dropout_rate,
                 normalize_before,
@@ -164,7 +165,7 @@ class ConvConformerEncoder(AbsEncoder):
                 output_size,
                 encoder_selfattn_layer_1(*encoder_selfattn_layer_args),
                 positionwise_layer_1(*positionwise_layer_args),
-                positionwise_layer(*positionwise_layer_args) if macaron_style else None,
+                positionwise_layer_1(*positionwise_layer_args) if macaron_style else None,
                 convolution_layer_2(*convolution_layer_args) if use_cnn_module else None,
                 dropout_rate,
                 normalize_before,
@@ -214,19 +215,19 @@ class ConvConformerEncoder(AbsEncoder):
         xs_pad = xs_pad.unsqueeze(1)   # (b, c, t, f)
         xs_pad = self.conv1(xs_pad)
         b, c, t, f = xs_pad.size()
-        xs_pad = self.conv1_out(xs_pad.transpose(1, 2).contiguous().view(b, t, c * f))
+        xs_pad, pos_emb = self.conv1_out(xs_pad.transpose(1, 2).contiguous().view(b, t, c * f))
         masks = masks[:, :, ::4]
-        xs_pad, masks = self.encoders_1(xs_pad, masks)
-        xs_pad = self.after_norm_1(xs_pad[0])
+        xs_pad, masks, _ = self.encoders_1(xs_pad, masks, pos_emb)
+        xs_pad = self.after_norm_1(xs_pad)
         
         # second block -- conv + MHA:
         xs_pad = xs_pad.transpose(1,2)    # (b, f, t)
         xs_pad = self.conv2(xs_pad)
         xs_pad = xs_pad.transpose(1,2)    # (b, t, f)
-        xs_pad = self.posenc_2(xs_pad)
+        xs_pad, pos_emb = self.posenc_2(xs_pad)
         masks = masks[:, :, ::2]
-        xs_pad, masks = self.encoders_2(xs_pad, masks)
-        xs_pad = self.after_norm_2(xs_pad[0]) 
+        xs_pad, masks, _ = self.encoders_2(xs_pad, masks, pos_emb)
+        xs_pad = self.after_norm_2(xs_pad) 
 
         if masks is not None:
             olens = masks.squeeze(1).sum(1)
