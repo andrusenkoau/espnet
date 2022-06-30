@@ -34,6 +34,8 @@ from espnet2.asr.encoder.rnn_encoder import RNNEncoder
 from espnet2.asr.encoder.transformer_encoder import TransformerEncoder
 from espnet2.asr.encoder.conv_transformer_encoder import ConvTransformerEncoder
 from espnet2.asr.encoder.conv_conformer_encoder import ConvConformerEncoder
+from espnet2.asr.encoder.u_conv_conformer_encoder import UConvConformerEncoder
+from espnet2.asr.encoder.u_conv_conformer_encoder_bpe import UConvConformerEncoderBPE
 from espnet2.asr.encoder.contextual_block_transformer_encoder import (
     ContextualBlockTransformerEncoder,  # noqa: H301
 )
@@ -41,8 +43,8 @@ from espnet2.asr.encoder.contextual_block_conformer_encoder import (
     ContextualBlockConformerEncoder,  # noqa: H301
 )
 from espnet2.asr.encoder.vgg_rnn_encoder import VGGRNNEncoder
-from espnet2.asr.encoder.wav2vec2_encoder import FairSeqWav2Vec2Encoder
-from espnet2.asr.encoder.wav2vec2_transformer_encoder import FairSeqWav2Vec2TransformerEncoder
+#from espnet2.asr.encoder.wav2vec2_encoder import FairSeqWav2Vec2Encoder
+#from espnet2.asr.encoder.wav2vec2_transformer_encoder import FairSeqWav2Vec2TransformerEncoder
 from espnet2.asr.espnet_model import ESPnetASRModel
 from espnet2.asr.frontend.abs_frontend import AbsFrontend
 from espnet2.asr.frontend.default import DefaultFrontend
@@ -125,13 +127,15 @@ encoder_choices = ClassChoices(
         transformer=TransformerEncoder,
         conv_transformer=ConvTransformerEncoder,
         conv_conformer=ConvConformerEncoder,
+        u_conv_conformer=UConvConformerEncoder,
+        u_conv_conformer_bpe=UConvConformerEncoderBPE,
         contextual_block_transformer=ContextualBlockTransformerEncoder,
         contextual_block_conformer=ContextualBlockConformerEncoder,
         vgg_rnn=VGGRNNEncoder,
         rnn=RNNEncoder,
-        wav2vec2=FairSeqWav2Vec2Encoder,
+        #wav2vec2=FairSeqWav2Vec2Encoder,
         hubert=FairseqHubertEncoder,
-        hubert_pretrain=FairseqHubertPretrainEncoder,
+        #hubert_pretrain=FairseqHubertPretrainEncoder,
     ),
     type_check=AbsEncoder,
     default="rnn",
