@@ -78,6 +78,7 @@ class TrainerOptions:
     grad_clip_type: float
     log_interval: Optional[int]
     no_forward_run: bool
+    use_matplotlib: bool
     use_tensorboard: bool
     use_wandb: bool
     output_dir: Union[Path, str]
@@ -337,7 +338,8 @@ class Trainer:
             if not distributed_option.distributed or distributed_option.dist_rank == 0:
                 # 3. Report the results
                 logging.info(reporter.log_message())
-                if plot_attention_iter_factory is not None:
+                #if plot_attention_iter_factory is not None:
+                if trainer_options.use_matplotlib:
                     reporter.matplotlib_plot(output_dir / "images")
                 if summary_writer is not None:
                     reporter.tensorboard_add_scalar(summary_writer)
