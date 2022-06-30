@@ -164,6 +164,62 @@ class Conv2dSubsampling2(torch.nn.Module):
         return self.out[key]
 
 
+class Conv2dSubsampling3(torch.nn.Module):
+    """Convolutional 2D subsampling (to 1/3 length).
+    Args:
+        idim (int): Input dimension.
+        filters_num (int): Number of Conv2d output filters.
+        odim (int): Output dimension.
+        dropout_rate (float): Dropout rate.
+        pos_enc (torch.nn.Module): Custom position encoding layer.
+    """
+
+    def __init__(self, idim, filters_num, odim, dropout_rate, pos_enc=None):
+        """Construct an Conv2dSubsampling3 object."""
+        super(Conv2dSubsampling3, self).__init__()
+        if not filters_num:
+            filters_num = odim
+        self.conv = torch.nn.Sequential(
+            torch.nn.Conv2d(1, filters_num, 5, stride=3, padding=1),
+            torch.nn.ReLU(),
+        )
+        self.out = torch.nn.Sequential(
+            torch.nn.Linear(filters_num * (idim // 3), odim),
+            pos_enc if pos_enc is not None else PositionalEncoding(odim, dropout_rate),
+        )
+
+    def forward(self, x, x_mask):
+        """Subsample x.
+        Args:
+            x (torch.Tensor): Input tensor (#batch, time, idim).
+            x_mask (torch.Tensor): Input mask (#batch, 1, time).
+        Returns:
+            torch.Tensor: Subsampled tensor (#batch, time', odim),
+                where time' = time // 3.
+            torch.Tensor: Subsampled mask (#batch, 1, time'),
+                where time' = time // 3.
+        """
+        x = x.unsqueeze(1)  # (b, c, t, f)
+        x = self.conv(x)
+        b, c, t, f = x.size()
+        x = self.out(x.transpose(1, 2).contiguous().view(b, t, c * f))
+        if x_mask is None:
+            return x, None
+        if x_mask.shape[1] > 1:
+            x_mask = x_mask[:, :-2:3, :]
+        return x, x_mask[:, :, :-2:3]
+
+    def __getitem__(self, key):
+        """Get item.
+        When reset_parameters() is called, if use_scaled_pos_enc is used,
+            return the positioning encoding.
+        """
+        if key != -1:
+            raise NotImplementedError("Support only `-1` (for `reset_parameters`).")
+        return self.out[key]
+
+
+
 class Conv2dSubsampling6(torch.nn.Module):
     """Convolutional 2D subsampling (to 1/6 length).
 
