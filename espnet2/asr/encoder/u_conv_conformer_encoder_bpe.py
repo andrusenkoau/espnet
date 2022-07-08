@@ -365,8 +365,8 @@ class UConvConformerEncoderBPE(AbsEncoder):
         
         x = xs_pad
 
-        if self.use_interctc_loss:
-            inter_ctc_list = []
+        #if self.use_interctc_loss:
+        #    inter_ctc_list = []
 
         masks = (~make_pad_mask(ilens)[:, None, :]).to(x.device)
         #print(f"[DEBUG]: x.shape is: {x.shape}")
@@ -395,14 +395,14 @@ class UConvConformerEncoderBPE(AbsEncoder):
         # first block x4 -- conv + MHA:
         x, masks_x4 = self.conv1(x, masks)
         x, _ = self.conformer_block1(x, masks_x4)
-        #inter_x_1 = x
-        #inter_ctc_list.append(inter_x_1)
         
         # second block x8 -- conv + MHA:
-        x, masks_x8 = self.conv2(x, masks_x4)      
+        x, masks_x8 = self.conv2(x, masks_x4)
+        inter_x_1 = x     
         x, _ = self.conformer_block2(x, masks_x8)
         inter_x_2 = x
-        inter_ctc_list.append(inter_x_2)
+        #if self.use_interctc_loss:
+        #   inter_ctc_list.append(inter_x_2)
 
         # third block x16 -- conv + MHA:
         x, masks_x16 = self.conv3(x, masks_x8)       
@@ -412,7 +412,9 @@ class UConvConformerEncoderBPE(AbsEncoder):
         x = x.unsqueeze(1)
         x = self.upsampling4(x)
         x = x.squeeze(1)
-        inter_ctc_list.append(x)
+        inter_x_3 = x
+        #if self.use_interctc_loss:
+        #    inter_ctc_list.append(x)
         if x.shape[1] != inter_x_2.shape[1]:
             x, inter_x_2 = self.align_tensors(x, inter_x_2)
         x = self.resudial_coef*inter_x_2 + x
@@ -430,7 +432,7 @@ class UConvConformerEncoderBPE(AbsEncoder):
             olens = None
 
         if self.use_interctc_loss:
-            return (xs_pad, inter_ctc_list), olens, None
+            return (xs_pad, [inter_x_1, inter_x_2, inter_x_3]), olens, None
         else:
             return xs_pad, olens, None
 

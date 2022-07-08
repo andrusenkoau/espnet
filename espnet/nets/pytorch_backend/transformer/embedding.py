@@ -251,7 +251,7 @@ class RelPositionalEncoding(torch.nn.Module):
             torch.Tensor: Encoded tensor (batch, time, `*`).
 
         """
-        #self.extend_pe(x) # UB for multithreading
+        self.extend_pe(x) # UB for multithreading
         x = x * self.xscale
         pos_emb = self.pe[
             :,

@@ -113,13 +113,13 @@ class ConvConformerEncoder(AbsEncoder):
 
         # first block -- conv + MHA:
         self.conv1 = torch.nn.Sequential(
-            nn.Conv2d(1, conv1_filters, kernel_size=(3,7), stride=(2,2), padding=(1,3)),
+            nn.Conv2d(1, conv1_filters, kernel_size=(3,3), stride=(2,2), padding=(1,1)),
             torch.nn.ReLU(),
-            nn.Conv2d(conv1_filters, conv1_filters, kernel_size=(3,5), stride=(2,2), padding=(1,2)),
+            nn.Conv2d(conv1_filters, conv1_filters, kernel_size=(3,3), stride=(2,2), padding=(1,1)),
             torch.nn.ReLU(),
         )
         self.conv1_out = torch.nn.Sequential(
-            torch.nn.Linear(conv1_filters * (((input_size+1) // 2) // 2), output_size),
+            torch.nn.Linear(conv1_filters * ((input_size+1) // 4), output_size),
             pos_enc_class(output_size, 0.1),
         )
         positionwise_layer_1 = PositionwiseFeedForward
@@ -163,9 +163,9 @@ class ConvConformerEncoder(AbsEncoder):
             num_blocks_l2,
             lambda lnum: EncoderLayer(
                 output_size,
-                encoder_selfattn_layer_1(*encoder_selfattn_layer_args),
-                positionwise_layer_1(*positionwise_layer_args),
-                positionwise_layer_1(*positionwise_layer_args) if macaron_style else None,
+                encoder_selfattn_layer_2(*encoder_selfattn_layer_args),
+                positionwise_layer_2(*positionwise_layer_args),
+                positionwise_layer_2(*positionwise_layer_args) if macaron_style else None,
                 convolution_layer_2(*convolution_layer_args) if use_cnn_module else None,
                 dropout_rate,
                 normalize_before,
