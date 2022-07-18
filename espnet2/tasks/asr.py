@@ -35,6 +35,10 @@ from espnet2.asr.encoder.transformer_encoder import TransformerEncoder
 from espnet2.asr.encoder.conv_transformer_encoder import ConvTransformerEncoder
 from espnet2.asr.encoder.conv_conformer_encoder import ConvConformerEncoder
 from espnet2.asr.encoder.u_conv_conformer_encoder import UConvConformerEncoder
+from espnet2.asr.encoder.u_conv_conformer_encoder_b8t4 import UConvConformerEncoder_b8t4
+from espnet2.asr.encoder.u_conv_conformer_encoder_b16t4 import UConvConformerEncoder_b16t4
+from espnet2.asr.encoder.u_conv_conformer_encoder_b16t8_conv1d1l import UConvConformerEncoder_b16t8_conv1d1l
+from espnet2.asr.encoder.u_conv_conformer_encoder_b16t8_sepconv import UConvConformerEncoder_b16t8_sepconv
 from espnet2.asr.encoder.u_conv_conformer_encoder_bpe import UConvConformerEncoderBPE
 from espnet2.asr.encoder.contextual_block_transformer_encoder import (
     ContextualBlockTransformerEncoder,  # noqa: H301
@@ -128,6 +132,10 @@ encoder_choices = ClassChoices(
         conv_transformer=ConvTransformerEncoder,
         conv_conformer=ConvConformerEncoder,
         u_conv_conformer=UConvConformerEncoder,
+        u_conv_conformer_b8t4=UConvConformerEncoder_b8t4,
+        u_conv_conformer_b16t4=UConvConformerEncoder_b16t4,
+        u_conv_conformer_b16t8_conv1d1l=UConvConformerEncoder_b16t8_conv1d1l,
+        u_conv_conformer_b16t8_sepconv=UConvConformerEncoder_b16t8_sepconv,
         u_conv_conformer_bpe=UConvConformerEncoderBPE,
         contextual_block_transformer=ContextualBlockTransformerEncoder,
         contextual_block_conformer=ContextualBlockConformerEncoder,

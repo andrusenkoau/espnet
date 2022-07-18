@@ -191,7 +191,7 @@ class ConformerBlock(torch.nn.Module):
         return x, masks
 
 
-class UConvConformerEncoder(AbsEncoder):
+class UConvConformerEncoder_b8t4(AbsEncoder):
     """Conformer encoder module.
     Args:
         input_size (int): Input dimension.

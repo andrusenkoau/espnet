@@ -61,7 +61,7 @@ class Conv2dBlock(torch.nn.Module):
             torch.nn.ReLU(),
         )
         self.conv_out = torch.nn.Sequential(
-            torch.nn.Linear(filters_num * (idim // 4), odim),
+            torch.nn.Linear(filters_num * ((idim+1) // 4), odim),
         )
         
     def forward(
@@ -82,40 +82,57 @@ class Conv2dBlock(torch.nn.Module):
         return x, masks
 
 
-class Conv1d2lBlock(torch.nn.Module):
-    def __init__(
-        self,
-        idim=360,
-        filters_num=512,
-        stride=1,
-    ):
-        super(Conv1d2lBlock, self).__init__()
-        
-        self.stride=stride
-        self.conv = torch.nn.Sequential(
-            nn.Conv1d(idim, filters_num, 3, stride=1, padding=1),
-            #torch.nn.BatchNorm1d(filters_num),
-            nn.ReLU(),
-            nn.Conv1d(filters_num, filters_num, 3, stride=stride, padding=1),
-            #torch.nn.BatchNorm1d(filters_num),
-            nn.ReLU(),
-            nn.Conv1d(filters_num, idim, 1, stride=1),
+class SeparableConv(nn.Module):
+
+    def __init__(self, idim=280, kernel_size=3, activation=nn.ReLU(), bias=True):
+        super(SeparableConv, self).__init__()
+        assert (kernel_size - 1) % 2 == 0
+        channels=idim
+        self.pointwise_conv1 = nn.Conv1d(
+            channels,
+            2 * channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=bias,
         )
-        
-    def forward(
-        self,
-        x: torch.Tensor,
-        masks: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        
-        x = x.transpose(1,2)    # (b, f, t)
-        x = self.conv(x)
-        x = x.transpose(1,2)    # (b, t, f)
+        self.depthwise_conv = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size,
+            stride=2,
+            padding=(kernel_size - 1) // 2,
+            groups=channels,
+            bias=bias,
+        )
+        self.norm = nn.BatchNorm1d(channels)
+        self.pointwise_conv2 = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=bias,
+        )
+        self.activation = activation
+
+    def forward(self, x, masks):
+
+        x = x.transpose(1, 2)
+        # GLU mechanism
+        x = self.pointwise_conv1(x)  # (batch, 2*channel, dim)
+        x = nn.functional.glu(x, dim=1)  # (batch, channel, dim)
+        # 1D Depthwise Conv
+        x = self.depthwise_conv(x)
+        x = self.activation(x)
+        #x = self.activation(self.norm(x))
+
+        x = self.pointwise_conv2(x)
         if masks.shape[1] > 1:
-            masks = masks[:, ::self.stride, :]
-        masks = masks[:, :, ::self.stride]
-        
-        return x, masks
+            masks = masks[:, ::2, :]
+        masks = masks[:, :, ::2]
+       
+        return x.transpose(1, 2), masks
 
 
 class InterLossBlock(torch.nn.Module):
@@ -191,7 +208,7 @@ class ConformerBlock(torch.nn.Module):
         return x, masks
 
 
-class UConvConformerEncoder(AbsEncoder):
+class UConvConformerEncoder_b16t8_sepconv(AbsEncoder):
     """Conformer encoder module.
     Args:
         input_size (int): Input dimension.
@@ -228,9 +245,10 @@ class UConvConformerEncoder(AbsEncoder):
         output_size: int = 256,
         attention_heads: int = 4,
         linear_units: int = 2048,
-        num_blocks_1_x4 = 2,
-        num_blocks_2_x8 = 8,
-        num_blocks_3_x4 = 2,
+        num_blocks_1_x4: int = 2,
+        num_blocks_2_x8: int = 2,
+        num_blocks_3_x16: int = 7,
+        num_blocks_4_x8: int = 1,
         resudial_coef = 1.00,
         upsample_mode = "nearest",
         dropout_rate: float = 0.1,
@@ -281,7 +299,8 @@ class UConvConformerEncoder(AbsEncoder):
         )
 
         # second block (2_x8) -- conv + MHA:
-        self.conv2 = Conv1d2lBlock(idim=output_size, filters_num=conv2_filters, stride=2)
+        #self.conv2 = Conv1d1lBlock(idim=output_size, filters_num=conv2_filters, stride=2)
+        self.conv2 = SeparableConv(idim=output_size, kernel_size=3)
         self.conformer_block2 = ConformerBlock(
                                         output_size=output_size,
                                         attention_heads=attention_heads,
@@ -296,14 +315,29 @@ class UConvConformerEncoder(AbsEncoder):
                                         concat_after=concat_after,
         )
         
-        
-        # third block (3_x4) -- upsample2 + MHA:
-        self.upsampling3 = nn.Upsample(scale_factor=(2,1), mode=upsample_mode)
+        # third block (3_x16) -- conv + MHA:
+        self.conv3 = SeparableConv(idim=output_size, kernel_size=3)
         self.conformer_block3 = ConformerBlock(
                                         output_size=output_size,
                                         attention_heads=attention_heads,
                                         linear_units=linear_units,
-                                        num_blocks=num_blocks_3_x4,
+                                        num_blocks=num_blocks_3_x16,
+                                        dropout_rate=dropout_rate,
+                                        activation_type=activation_type,
+                                        use_cnn_module=use_cnn_module,
+                                        macaron_style=macaron_style,
+                                        cnn_module_kernel=cnn_module_kernel,
+                                        normalize_before=normalize_before,
+                                        concat_after=concat_after,
+        )
+        
+        # fourth block (4_x8) -- upsample + MHA:
+        self.upsampling4 = nn.Upsample(scale_factor=(2,1), mode=upsample_mode)
+        self.conformer_block4 = ConformerBlock(
+                                        output_size=output_size,
+                                        attention_heads=attention_heads,
+                                        linear_units=linear_units,
+                                        num_blocks=num_blocks_4_x8,
                                         dropout_rate=dropout_rate,
                                         activation_type=activation_type,
                                         use_cnn_module=use_cnn_module,
@@ -349,6 +383,9 @@ class UConvConformerEncoder(AbsEncoder):
         
         x = xs_pad
 
+        #if self.use_interctc_loss:
+        #    inter_ctc_list = []
+
         masks = (~make_pad_mask(ilens)[:, None, :]).to(x.device)
         #print(f"[DEBUG]: x.shape is: {x.shape}")
         #print(f"[DEBUG]: masks.shape is: {masks.shape}")
@@ -373,27 +410,33 @@ class UConvConformerEncoder(AbsEncoder):
             initial_masks = masks
         ##
 
-        # first block -- conv + MHA:
-        x, masks = self.conv1(x, masks)
-        masks_x4 = masks
-        x, _ = self.conformer_block1(x, masks)
-        inter_x_1 = x
+        # first block x4 -- conv + MHA:
+        x, masks_x4 = self.conv1(x, masks)
+        x, _ = self.conformer_block1(x, masks_x4)
         
-        # second block -- conv + MHA:
-        x, masks = self.conv2(x, masks_x4)
-        masks_x8 = masks        
-        x, masks = self.conformer_block2(x, masks)
-        
-        # third block -- upsample + conv + MHA
-        x = x.unsqueeze(1)
-        x = self.upsampling3(x)
-        x = x.squeeze(1)
+        # second block x8 -- conv + MHA:
+        x, masks_x8 = self.conv2(x, masks_x4)
+        inter_x_1 = x     
+        x, _ = self.conformer_block2(x, masks_x8)
         inter_x_2 = x
-        if x.shape[1] != inter_x_1.shape[1]:
-            x, inter_x_1 = self.align_tensors(x, inter_x_1)
-        x = self.resudial_coef*inter_x_1 + x
-        #x, _ = self.conv5(x, masks)
-        x, masks = self.conformer_block3(x, masks_x4)
+        #if self.use_interctc_loss:
+        #   inter_ctc_list.append(inter_x_2)
+
+        # third block x16 -- conv + MHA:
+        x, masks_x16 = self.conv3(x, masks_x8)       
+        x, _ = self.conformer_block3(x, masks_x16)
+        
+        # fourth block x8 -- upsample + conv + MHA
+        x = x.unsqueeze(1)
+        x = self.upsampling4(x)
+        x = x.squeeze(1)
+        inter_x_3 = x
+        #if self.use_interctc_loss:
+        #    inter_ctc_list.append(x)
+        if x.shape[1] != inter_x_2.shape[1]:
+            x, inter_x_2 = self.align_tensors(x, inter_x_2)
+        x = self.resudial_coef*inter_x_2 + x
+        x, masks = self.conformer_block4(x, masks_x8)
 
         xs_pad = x
 
@@ -407,7 +450,7 @@ class UConvConformerEncoder(AbsEncoder):
             olens = None
 
         if self.use_interctc_loss:
-            return (xs_pad, [inter_x_1, inter_x_2]), olens, None
+            return (xs_pad, [inter_x_1, inter_x_2, inter_x_3]), olens, None
         else:
             return xs_pad, olens, None
 
@@ -426,4 +469,5 @@ class UConvConformerEncoder(AbsEncoder):
         self.conformer_block1.encoders = encoders_class(*[layer for layer in self.conformer_block1.encoders])
         self.conformer_block2.encoders = encoders_class(*[layer for layer in self.conformer_block2.encoders])
         self.conformer_block3.encoders = encoders_class(*[layer for layer in self.conformer_block3.encoders])
+        self.conformer_block4.encoders = encoders_class(*[layer for layer in self.conformer_block4.encoders])
 
