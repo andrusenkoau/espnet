@@ -1,14 +1,12 @@
-from typing import Tuple
-from typing import Union
+from typing import Tuple, Union
 
 import torch
 from torch_complex.tensor import ComplexTensor
 
-from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
-from espnet2.enh.layers.complex_utils import to_double
-from espnet2.enh.layers.complex_utils import to_float
+from espnet2.enh.layers.complex_utils import to_double, to_float
 from espnet2.enh.layers.mask_estimator import MaskEstimator
 from espnet2.enh.layers.wpe import wpe_one_iteration
+from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
 
 
 class DNN_WPE(torch.nn.Module):
@@ -97,7 +95,7 @@ class DNN_WPE(torch.nn.Module):
 
         for i in range(self.iterations):
             # Calculate power: (..., C, T)
-            power = [enh.real ** 2 + enh.imag ** 2 for enh in enhanced]
+            power = [enh.real**2 + enh.imag**2 for enh in enhanced]
             if i == 0 and self.use_dnn_mask:
                 # mask: (B, F, C, T)
                 masks, _ = self.mask_est(data, ilens)

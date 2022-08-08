@@ -5,9 +5,10 @@ Created on Sat Aug 21 16:57:31 2021.
 @author: Keqi Deng (UCAS)
 """
 
-from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
 import torch
 from torch import nn
+
+from espnet.nets.pytorch_backend.transformer.layer_norm import LayerNorm
 
 
 class ContextualBlockEncoderLayer(nn.Module):
@@ -191,7 +192,7 @@ class ContextualBlockEncoderLayer(nn.Module):
             next_ctx[:, 0, layer_idx, :] = x[:, 0, -1, :]
             next_ctx[:, 1:, layer_idx, :] = x[:, 0:-1, -1, :]
 
-        return x, mask, False, next_ctx, next_ctx, layer_idx
+        return x, mask, False, next_ctx, next_ctx, False, layer_idx
 
     def forward_infer(
         self,

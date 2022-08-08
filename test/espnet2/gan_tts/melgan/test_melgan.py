@@ -7,11 +7,12 @@ import numpy as np
 import pytest
 import torch
 
-from espnet2.gan_tts.hifigan.loss import DiscriminatorAdversarialLoss
-from espnet2.gan_tts.hifigan.loss import FeatureMatchLoss
-from espnet2.gan_tts.hifigan.loss import GeneratorAdversarialLoss
-from espnet2.gan_tts.melgan import MelGANGenerator
-from espnet2.gan_tts.melgan import MelGANMultiScaleDiscriminator
+from espnet2.gan_tts.hifigan.loss import (
+    DiscriminatorAdversarialLoss,
+    FeatureMatchLoss,
+    GeneratorAdversarialLoss,
+)
+from espnet2.gan_tts.melgan import MelGANGenerator, MelGANMultiScaleDiscriminator
 
 
 def make_melgan_generator_args(**kwargs):
@@ -134,14 +135,11 @@ except ImportError:
     not is_parallel_wavegan_available, reason="parallel_wavegan is not installed."
 )
 def test_parallel_wavegan_compatibility():
-    from parallel_wavegan.utils import download_pretrained_model
-    from parallel_wavegan.utils import load_model
+    from parallel_wavegan.models import MelGANGenerator as PWGMelGANGenerator
 
-    ckpt_path = download_pretrained_model("ljspeech_melgan.v1")
-    state_dict = torch.load(ckpt_path, map_location="cpu")["model"]["generator"]
-    model_pwg = load_model(ckpt_path)
-    model_espnet2 = MelGANGenerator()
-    model_espnet2.load_state_dict(state_dict)
+    model_pwg = PWGMelGANGenerator(**make_melgan_generator_args())
+    model_espnet2 = MelGANGenerator(**make_melgan_generator_args())
+    model_espnet2.load_state_dict(model_pwg.state_dict())
     model_pwg.eval()
     model_espnet2.eval()
 

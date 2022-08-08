@@ -8,17 +8,18 @@ This code is based on https://github.com/jaywalnut310/vits.
 """
 
 import math
-
 from typing import Optional
 
 import torch
 import torch.nn.functional as F
 
-from espnet2.gan_tts.vits.flow import ConvFlow
-from espnet2.gan_tts.vits.flow import DilatedDepthSeparableConv
-from espnet2.gan_tts.vits.flow import ElementwiseAffineFlow
-from espnet2.gan_tts.vits.flow import FlipFlow
-from espnet2.gan_tts.vits.flow import LogFlow
+from espnet2.gan_tts.vits.flow import (
+    ConvFlow,
+    DilatedDepthSeparableConv,
+    ElementwiseAffineFlow,
+    FlipFlow,
+    LogFlow,
+)
 
 
 class StochasticDurationPredictor(torch.nn.Module):
@@ -157,7 +158,7 @@ class StochasticDurationPredictor(torch.nn.Module):
                 (F.logsigmoid(z_u) + F.logsigmoid(-z_u)) * x_mask, [1, 2]
             )
             logq = (
-                torch.sum(-0.5 * (math.log(2 * math.pi) + (e_q ** 2)) * x_mask, [1, 2])
+                torch.sum(-0.5 * (math.log(2 * math.pi) + (e_q**2)) * x_mask, [1, 2])
                 - logdet_tot_q
             )
 
@@ -169,7 +170,7 @@ class StochasticDurationPredictor(torch.nn.Module):
                 z, logdet = flow(z, x_mask, g=x, inverse=inverse)
                 logdet_tot = logdet_tot + logdet
             nll = (
-                torch.sum(0.5 * (math.log(2 * math.pi) + (z ** 2)) * x_mask, [1, 2])
+                torch.sum(0.5 * (math.log(2 * math.pi) + (z**2)) * x_mask, [1, 2])
                 - logdet_tot
             )
             return nll + logq  # (B,)

@@ -9,20 +9,20 @@ import argparse
 import importlib
 import os
 import tempfile
+from test.utils_test import make_dummy_json
 
 import chainer
 import numpy as np
 import pytest
 import torch
 
-from espnet.asr import asr_utils
 import espnet.nets.chainer_backend.e2e_asr as ch_asr
 import espnet.nets.pytorch_backend.e2e_asr as th_asr
+from espnet.asr import asr_utils
 from espnet.nets.pytorch_backend.nets_utils import pad_list
 from espnet.nets.pytorch_backend.streaming.segment import SegmentStreamingE2E
 from espnet.nets.pytorch_backend.streaming.window import WindowStreamingE2E
 from espnet.utils.training.batchfy import make_batchset
-from test.utils_test import make_dummy_json
 
 
 def make_arg(**kwargs):
@@ -60,7 +60,7 @@ def make_arg(**kwargs):
         streaming_onset_margin=2,
         streaming_offset_margin=2,
         verbose=2,
-        char_list=[u"あ", u"い", u"う", u"え", u"お"],
+        char_list=["あ", "い", "う", "え", "お"],
         outdir=None,
         ctc_type="warpctc",
         report_cer=False,
@@ -320,7 +320,7 @@ def test_gradient_noise_injection(module):
         import espnet.nets.pytorch_backend.e2e_asr as m
     else:
         import espnet.nets.chainer_backend.e2e_asr as m
-    batchset = make_batchset(dummy_json, 2, 2 ** 10, 2 ** 10, shortest_first=True)
+    batchset = make_batchset(dummy_json, 2, 2**10, 2**10, shortest_first=True)
     model = m.E2E(10, 5, args)
     model_org = m.E2E(10, 5, args_org)
     for batch in batchset:
@@ -343,7 +343,7 @@ def test_sortagrad_trainable(module):
         import espnet.nets.pytorch_backend.e2e_asr as m
     else:
         import espnet.nets.chainer_backend.e2e_asr as m
-    batchset = make_batchset(dummy_json, 2, 2 ** 10, 2 ** 10, shortest_first=True)
+    batchset = make_batchset(dummy_json, 2, 2**10, 2**10, shortest_first=True)
     model = m.E2E(idim, odim, args)
     for batch in batchset:
         loss = model(*convert_batch(batch, module, idim=idim, odim=odim))
@@ -744,6 +744,7 @@ def test_multi_gpu_trainable(module):
         loss.backward(loss.new_ones(ngpu))  # trainable
     else:
         import copy
+
         import cupy
 
         losses = []

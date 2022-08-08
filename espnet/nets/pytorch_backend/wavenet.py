@@ -12,7 +12,6 @@ import time
 import numpy as np
 import torch
 import torch.nn.functional as F
-
 from torch import nn
 
 
@@ -202,7 +201,7 @@ class WaveNet(nn.Module):
         self.upsampling_factor = upsampling_factor
 
         self.dilations = [
-            2 ** i for i in range(self.dilation_depth)
+            2**i for i in range(self.dilation_depth)
         ] * self.dilation_repeat
         self.receptive_field = (self.kernel_size - 1) * sum(self.dilations) + 1
 

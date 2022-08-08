@@ -1,11 +1,7 @@
-from collections import defaultdict
 import logging
+from collections import defaultdict
 from pathlib import Path
-from typing import Dict
-from typing import Iterable
-from typing import List
-from typing import Optional
-from typing import Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -92,7 +88,7 @@ def collect_stats(
                             seq = seq[None]
                         # Accumulate value, its square, and count
                         sum_dict[key] += seq.sum(0)
-                        sq_dict[key] += (seq ** 2).sum(0)
+                        sq_dict[key] += (seq**2).sum(0)
                         count_dict[key] += len(seq)
 
                         # 4. [Option] Write derived features as npy format file.

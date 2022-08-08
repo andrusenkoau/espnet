@@ -6,15 +6,14 @@
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
 
 import logging
-
-from distutils.version import LooseVersion
 from functools import partial
-from typeguard import check_argument_types
 from typing import Optional
 
 import librosa
 import numpy as np
 import torch
+from packaging.version import parse as V
+from typeguard import check_argument_types
 
 EPS = 1e-10
 
@@ -45,7 +44,9 @@ def logmel2linear(
     fmin = 0 if fmin is None else fmin
     fmax = fs / 2 if fmax is None else fmax
     mspc = np.power(10.0, lmspc)
-    mel_basis = librosa.filters.mel(fs, n_fft, n_mels, fmin, fmax)
+    mel_basis = librosa.filters.mel(
+        sr=fs, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax
+    )
     inv_mel_basis = np.linalg.pinv(mel_basis)
     return np.maximum(EPS, np.dot(inv_mel_basis, mspc.T).T)
 
@@ -75,7 +76,7 @@ def griffin_lim(
     # assert the size of input linear spectrogram
     assert spc.shape[1] == n_fft // 2 + 1
 
-    if LooseVersion(librosa.__version__) >= LooseVersion("0.7.0"):
+    if V(librosa.__version__) >= V("0.7.0"):
         # use librosa's fast Grriffin-Lim algorithm
         spc = np.abs(spc.T)
         y = librosa.griffinlim(

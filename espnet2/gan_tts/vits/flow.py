@@ -8,10 +8,7 @@ This code is based on https://github.com/jaywalnut310/vits.
 """
 
 import math
-
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import Optional, Tuple, Union
 
 import torch
 
@@ -155,7 +152,7 @@ class DilatedDepthSeparableConv(torch.nn.Module):
 
         self.convs = torch.nn.ModuleList()
         for i in range(layers):
-            dilation = kernel_size ** i
+            dilation = kernel_size**i
             padding = (kernel_size * dilation - dilation) // 2
             self.convs += [
                 torch.nn.Sequential(

@@ -180,7 +180,7 @@ You need to do one of the following two ways to change the training configuratio
 
 ```sh
 # Give a configuration file
-./run.sh --asr_train_config conf/train_asr.yaml
+./run.sh --asr_config conf/train_asr.yaml
 # Give arguments to "espnet2/bin/asr_train.py" directly
 ./run.sh --asr_args "--foo arg --bar arg2"
 ```
@@ -222,6 +222,12 @@ Note that you need to setup your environment correctly to use distributed traini
 
 - [Distributed training](./espnet2_distributed.md)
 - [Using Job scheduling system](./parallelization.md)
+
+
+### Relationship between mini-batch size and number of GPUs
+
+The behavior of batch size in ESPnet2 during multi-GPU training is different from that in ESPnet1. **In ESPnet2, the total batch size is not changed regardless of the number of GPUs.** Therefore, you need to manually increase the batch size if you increase the number of GPUs. Please refer to this [doc](https://espnet.github.io/espnet/espnet2_training_option.html#the-relation-between-mini-batch-size-and-number-of-gpus) for more information.
+
 
 ## Use specified experiment directory for evaluation
 
@@ -291,7 +297,7 @@ To use SSLRs in your task, you need to make several modifications.
 ### Usage
 1. To reduce the time used in `collect_stats` step, please specify `--feats_normalize uttmvn` in `run.sh` and pass it as arguments to `asr.sh` or other task-specific scripts. (Recommended)
 2. In the configuration file, specify the `frontend` and `preencoder`. Taking `HuBERT` as an example:
-   The `upsteam` name can be whatever supported in S3PRL. `multilayer-feature=True` means the final representation is a weighted-sum of all layers' hidden states from SSLR model.
+   The `upstream` name can be whatever supported in S3PRL. `multilayer-feature=True` means the final representation is a weighted-sum of all layers' hidden states from SSLR model.
    ```
    frontend: s3prl
    frontend_conf:

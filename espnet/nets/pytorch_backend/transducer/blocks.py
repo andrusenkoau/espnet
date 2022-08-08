@@ -1,39 +1,31 @@
 """Set of methods to create custom architecture."""
 
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Tuple
-from typing import Union
+from typing import Any, Dict, List, Tuple, Union
 
 import torch
 
 from espnet.nets.pytorch_backend.conformer.convolution import ConvolutionModule
 from espnet.nets.pytorch_backend.conformer.encoder_layer import (
-    EncoderLayer as ConformerEncoderLayer,  # noqa: H301
+    EncoderLayer as ConformerEncoderLayer,
 )
-
 from espnet.nets.pytorch_backend.nets_utils import get_activation
-
-from espnet.nets.pytorch_backend.transducer.conv1d_nets import CausalConv1d
-from espnet.nets.pytorch_backend.transducer.conv1d_nets import Conv1d
+from espnet.nets.pytorch_backend.transducer.conv1d_nets import CausalConv1d, Conv1d
 from espnet.nets.pytorch_backend.transducer.transformer_decoder_layer import (
-    TransformerDecoderLayer,  # noqa: H301
+    TransformerDecoderLayer,
 )
 from espnet.nets.pytorch_backend.transducer.vgg2l import VGG2L
-
 from espnet.nets.pytorch_backend.transformer.attention import (
-    MultiHeadedAttention,  # noqa: H301
-    RelPositionMultiHeadedAttention,  # noqa: H301
+    MultiHeadedAttention,
+    RelPositionMultiHeadedAttention,
+)
+from espnet.nets.pytorch_backend.transformer.embedding import (
+    PositionalEncoding,
+    RelPositionalEncoding,
+    ScaledPositionalEncoding,
 )
 from espnet.nets.pytorch_backend.transformer.encoder_layer import EncoderLayer
-from espnet.nets.pytorch_backend.transformer.embedding import (
-    PositionalEncoding,  # noqa: H301
-    ScaledPositionalEncoding,  # noqa: H301
-    RelPositionalEncoding,  # noqa: H301
-)
 from espnet.nets.pytorch_backend.transformer.positionwise_feed_forward import (
-    PositionwiseFeedForward,  # noqa: H301
+    PositionwiseFeedForward,
 )
 from espnet.nets.pytorch_backend.transformer.repeat import MultiSequential
 from espnet.nets.pytorch_backend.transformer.subsampling import Conv2dSubsampling
@@ -369,8 +361,12 @@ def build_conformer_block(
     pos_dropout_rate = block.get("pos-dropout-rate", 0.0)
     att_dropout_rate = block.get("att-dropout-rate", 0.0)
 
+    macaron_style = block["macaron_style"]
+    use_conv_mod = block["use_conv_mod"]
+
     if pw_layer_type == "linear":
-        pw_layer = PositionwiseFeedForward(
+        pw_layer = PositionwiseFeedForward
+        pw_layer_args = (
             d_hidden,
             d_ff,
             pos_dropout_rate,
@@ -379,33 +375,29 @@ def build_conformer_block(
     else:
         raise NotImplementedError("Conformer block only supports linear yet.")
 
-    macaron_net = (
-        PositionwiseFeedForward(
+    if macaron_style:
+        macaron_net = PositionwiseFeedForward
+        macaron_net_args = (
             d_hidden,
             d_ff,
             pos_dropout_rate,
             get_activation(pw_activation_type),
         )
-        if block["macaron_style"]
-        else None
-    )
 
-    conv_mod = (
-        ConvolutionModule(
+    if use_conv_mod:
+        conv_mod = ConvolutionModule
+        conv_mod_args = (
             d_hidden,
             block["conv_mod_kernel"],
             get_activation(conv_mod_activation_type),
         )
-        if block["use_conv_mod"]
-        else None
-    )
 
     return lambda: ConformerEncoderLayer(
         d_hidden,
         self_attn_class(block["heads"], d_hidden, att_dropout_rate),
-        pw_layer,
-        macaron_net,
-        conv_mod,
+        pw_layer(*pw_layer_args),
+        macaron_net(*macaron_net_args) if macaron_style else None,
+        conv_mod(*conv_mod_args) if use_conv_mod else None,
         dropout_rate,
     )
 

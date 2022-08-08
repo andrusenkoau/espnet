@@ -10,11 +10,8 @@ import torch
 import torch.nn.functional as F
 
 from espnet.nets.pytorch_backend.nets_utils import make_non_pad_mask
-from espnet.nets.pytorch_backend.rnn.attentions import AttForward
-from espnet.nets.pytorch_backend.rnn.attentions import AttForwardTA
-from espnet.nets.pytorch_backend.rnn.attentions import AttLoc
-from espnet.nets.pytorch_backend.tacotron2.cbhg import CBHG
-from espnet.nets.pytorch_backend.tacotron2.cbhg import CBHGLoss
+from espnet.nets.pytorch_backend.rnn.attentions import AttForward, AttForwardTA, AttLoc
+from espnet.nets.pytorch_backend.tacotron2.cbhg import CBHG, CBHGLoss
 from espnet.nets.pytorch_backend.tacotron2.decoder import Decoder
 from espnet.nets.pytorch_backend.tacotron2.encoder import Encoder
 from espnet.nets.tts_interface import TTSInterface
@@ -121,7 +118,7 @@ class GuidedAttentionLoss(torch.nn.Module):
         grid_x, grid_y = torch.meshgrid(torch.arange(olen), torch.arange(ilen))
         grid_x, grid_y = grid_x.float().to(olen.device), grid_y.float().to(ilen.device)
         return 1.0 - torch.exp(
-            -((grid_y / ilen - grid_x / olen) ** 2) / (2 * (sigma ** 2))
+            -((grid_y / ilen - grid_x / olen) ** 2) / (2 * (sigma**2))
         )
 
     @staticmethod

@@ -67,8 +67,11 @@ See also:
 Wav dumping stage.
 This stage reformats `wav.scp` in data directories.
 
-Additionally, we support X-vector extraction in this stage as you can use in ESPnet1.
-If you specify `--use_xvector true` (Default: `use_xvector=false`), we extract mfcc features, vad decision, and X-vector.
+Additionally, We support X-vector extraction in this stage as you can use in ESPnet1.
+If you specify `--use_xvector true` (Default: `use_xvector=false`), we extract X-vectors.
+You can select the type of toolkit to use (kaldi, speechbrain, or espnet) when you specify `--xvector_tool <option>` 
+(Default: `xvector_tool=kaldi`).
+If you specify kaldi, then we additionally extract mfcc features and vad decision.
 This processing requires the compiled kaldi, please be careful.
 
 Also, speaker ID embedding and language ID embedding preparation will be performed in this stage if you specify `--use_sid true` and `--use_lid true` options.
@@ -723,6 +726,7 @@ You can train the following models by changing `*.yaml` config for `--train_conf
 - [FastSpeech2](https://arxiv.org/abs/2006.04558) ([FastPitch](https://arxiv.org/abs/2006.06873))
 - [Conformer](https://arxiv.org/abs/2005.08100)-based FastSpeech / FastSpeech2
 - [VITS](https://arxiv.org/abs/2106.06103)
+- [JETS](https://arxiv.org/abs/2203.16852)
 
 You can find example configs of the above models in [`egs2/ljspeech/tts1/conf/tuning`](../../ljspeech/tts1/conf/tuning).
 
@@ -738,6 +742,11 @@ X-Vector is provided by kaldi and pretrained with VoxCeleb corpus.
 You can find example configs of the above models in:
 - [`egs2/vctk/tts1/conf/tuning`](../../vctk/tts1/conf/tuning).
 - [`egs2/libritts/tts1/conf/tuning`](../../vctk/libritts/conf/tuning).
+
+And now we support other toolkit's xvector.
+Please check the following options.
+
+https://github.com/espnet/espnet/blob/df053b8c13c26fe289fc882751801fd781e9d43e/egs2/TEMPLATE/tts1/tts.sh#L69-L71
 
 ## FAQ
 

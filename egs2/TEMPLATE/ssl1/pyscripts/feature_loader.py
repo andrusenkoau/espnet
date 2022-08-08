@@ -7,14 +7,13 @@
 #     Paper: https://arxiv.org/pdf/2106.07447.pdf
 #     Code in Fairseq: https://github.com/pytorch/fairseq/tree/master/examples/hubert
 
-"""Extract MFCC & intermediate embedding from the Hubert model for k-means clustering."""
+"""Extract MFCC & intermediate embedding from the Hubert model for k-means clustering"""
 
 import logging
 import os
 import sys
 
 import fairseq
-
 import soundfile as sf
 import torch
 import torchaudio
@@ -43,7 +42,9 @@ class MfccFeatureReader(object):
             x = torch.from_numpy(x).view(1, -1).float()
 
             mfcc = torchaudio.compliance.kaldi.mfcc(
-                waveform=x, sample_frequency=self.fs, use_energy=False,
+                waveform=x,
+                sample_frequency=self.fs,
+                use_energy=False,
             ).transpose(
                 0, 1
             )  # (freq, time)
@@ -54,16 +55,17 @@ class MfccFeatureReader(object):
             )
             return concat
 
-        
+
 class HubertFeatureReader(object):
     def __init__(self, fs, hubert_url, hubert_dir_path, layer, max_chunk=1600000):
         self.fs = fs
-        
+
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         from espnet2.asr.encoder.hubert_encoder import FairseqHubertEncoder
+
         e = FairseqHubertEncoder(0, hubert_url, hubert_dir_path)
         self.model = e.encoders.to(self.device).eval()
-        
+
         self.layer = layer
         self.max_chunk = max_chunk
         logger.info(f" max_chunk = {self.max_chunk}")

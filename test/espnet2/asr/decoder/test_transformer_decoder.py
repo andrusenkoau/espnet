@@ -1,22 +1,18 @@
 import pytest
 import torch
 
+from espnet2.asr.ctc import CTC
+from espnet2.asr.decoder.transformer_decoder import (  # noqa: H301
+    DynamicConvolution2DTransformerDecoder,
+    DynamicConvolutionTransformerDecoder,
+    LightweightConvolution2DTransformerDecoder,
+    LightweightConvolutionTransformerDecoder,
+    TransformerDecoder,
+)
 from espnet.nets.batch_beam_search import BatchBeamSearch
 from espnet.nets.batch_beam_search_online_sim import BatchBeamSearchOnlineSim
 from espnet.nets.beam_search import BeamSearch
 from espnet.nets.scorers.ctc import CTCPrefixScorer
-from espnet2.asr.ctc import CTC
-from espnet2.asr.decoder.transformer_decoder import (
-    DynamicConvolution2DTransformerDecoder,  # noqa: H301
-)
-from espnet2.asr.decoder.transformer_decoder import DynamicConvolutionTransformerDecoder
-from espnet2.asr.decoder.transformer_decoder import (
-    LightweightConvolution2DTransformerDecoder,  # noqa: H301
-)
-from espnet2.asr.decoder.transformer_decoder import (
-    LightweightConvolutionTransformerDecoder,  # noqa: H301
-)
-from espnet2.asr.decoder.transformer_decoder import TransformerDecoder
 
 
 @pytest.mark.parametrize("input_layer", ["linear", "embed"])
@@ -217,7 +213,7 @@ def test_TransformerDecoder_batch_beam_search_online(
         use_output_layer=use_output_layer,
         linear_units=10,
     )
-    ctc = CTC(odim=vocab_size, encoder_output_sizse=encoder_output_size)
+    ctc = CTC(odim=vocab_size, encoder_output_size=encoder_output_size)
     ctc.to(dtype)
     ctc_scorer = CTCPrefixScorer(ctc=ctc, eos=vocab_size - 1)
     beam = BatchBeamSearchOnlineSim(

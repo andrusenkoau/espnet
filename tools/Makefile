@@ -1,5 +1,5 @@
-# PyTorch version: 1.3.1, 1.4.0, 1.5.1, 1.6.0, 1.7.1, 1.8.1, 1.9.1, 1.10.0 and 1.10.1 are tested.
-TH_VERSION := 1.10.1
+# PyTorch version: 1.3.1, 1.4.0, 1.5.1, 1.6.0, 1.7.1, 1.8.1, 1.9.1, 1.10.0, 1.10.1 and 1.11.0 are tested.
+TH_VERSION := 1.11.0
 
 # Use pip for pytorch installation even if you have anaconda
 ifneq ($(shell test -f ./activate_python.sh && grep 'conda activate' ./activate_python.sh),)
@@ -28,14 +28,8 @@ endif
 
 all: kaldi showenv python conda_packages.done sctk.done sph2pipe.done check_install
 
-ifneq ($(strip $(CHAINER_VERSION)),)
-python: activate_python.sh espnet.done pytorch.done chainer.done fairscale.done torch_optimizer.done
-extra: warp-ctc.done warp-transducer.done chainer_ctc.done nkf.done moses.done mwerSegmenter.done pesq kenlm.done pyopenjtalk.done py3mmseg.done beamformit.done fairseq.done s3prl.done k2.done transformers.done phonemizer.done
-else
-python: activate_python.sh espnet.done pytorch.done fairscale.done torch_optimizer.done
-extra: warp-ctc.done warp-transducer.done nkf.done moses.done mwerSegmenter.done pesq kenlm.done pyopenjtalk.done py3mmseg.done beamformit.done fairseq.done s3prl.done k2.done transformers.done phonemizer.done
-endif
-
+python: activate_python.sh packaging.done espnet.done pytorch.done chainer.done fairscale.done torch_optimizer.done
+extra: warp-ctc.done warp-transducer.done chainer_ctc.done nkf.done moses.done mwerSegmenter.done pesq kenlm.done pyopenjtalk.done py3mmseg.done beamformit.done fairseq.done s3prl.done k2.done transformers.done phonemizer.done longformer.done
 
 kaldi:
 	test -f kaldi/egs/wsj/s5/utils/parse_options.sh || git clone --depth 1 https://github.com/kaldi-asr/kaldi
@@ -73,7 +67,7 @@ sox.done: activate_python.sh
 	. ./activate_python.sh && { command -v sox || conda install -y sox -c conda-forge; }
 	touch sox.done
 sndfile.done: activate_python.sh
-	. ./activate_python.sh && { python3 -c "from ctypes.util import find_library as F; assert F('sndfile') is not None" || conda install -y libsndfile=1.0.28 -c conda-forge; }
+	. ./activate_python.sh && { python3 -c "from ctypes.util import find_library as F; assert F('sndfile') is not None" || conda install -y libsndfile -c conda-forge; }
 	touch sndfile.done
 ifneq ($(strip $(USE_CONDA)),)
 conda_packages.done: bc.done cmake.done flac.done ffmpeg.done sox.done sndfile.done
@@ -90,11 +84,18 @@ sph2pipe.done:
 	./installers/install_sph2pipe.sh
 	touch sph2pipe.done
 
+packaging.done: activate_python.sh
+	. ./activate_python.sh && python3 -m pip install packaging
+	touch packaging.done
 
-pytorch.done: activate_python.sh
+pytorch.done: activate_python.sh packaging.done
 ifeq ($(strip $(USE_CONDA)),)
+	# NOTE(kamo): Temporary fixed numpy version
+	. ./activate_python.sh && pip install "numpy<=1.21.4"
 	. ./activate_python.sh && ./installers/install_torch.sh "false" "${TH_VERSION}" "${CUDA_VERSION}"
 else
+	# NOTE(kamo): Temporary fixed numpy version
+	. ./activate_python.sh && pip install "numpy<=1.21.4"
 	. ./activate_python.sh && ./installers/install_torch.sh "true" "${TH_VERSION}" "${CUDA_VERSION}"
 endif
 	touch pytorch.done
@@ -144,6 +145,10 @@ pyopenjtalk.done: espnet.done conda_packages.done
 phonemizer.done: espnet.done conda_packages.done
 	. ./activate_python.sh && ./installers/install_phonemizer.sh
 	touch phonemizer.done
+
+speechbrain.done: espnet.done conda_packages.done
+	. ./activate_python.sh && ./installers/install_speechbrain.sh
+	touch speechbrain.done
 
 moses.done:
 	git clone --depth 1 https://github.com/moses-smt/mosesdecoder.git moses
@@ -196,6 +201,10 @@ gtn.done: espnet.done
 transformers.done: espnet.done
 	. ./activate_python.sh && ./installers/install_transformers.sh
 	touch transformers.done
+
+longformer.done: espnet.done
+	. ./activate_python.sh && ./installers/install_longformer.sh
+	touch longformer.done
 
 check_install: python
 	. ./activate_python.sh; . ./extra_path.sh; python3 check_install.py

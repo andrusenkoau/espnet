@@ -1,7 +1,7 @@
 from typing import Tuple
 
-from pytorch_wpe import wpe_one_iteration
 import torch
+from pytorch_wpe import wpe_one_iteration
 from torch_complex.tensor import ComplexTensor
 
 from espnet.nets.pytorch_backend.frontends.mask_estimator import MaskEstimator
@@ -62,7 +62,7 @@ class DNN_WPE(torch.nn.Module):
 
         for i in range(self.iterations):
             # Calculate power: (..., C, T)
-            power = enhanced.real ** 2 + enhanced.imag ** 2
+            power = enhanced.real**2 + enhanced.imag**2
             if i == 0 and self.use_dnn_mask:
                 # mask: (B, F, C, T)
                 (mask,), _ = self.mask_est(enhanced, ilens)

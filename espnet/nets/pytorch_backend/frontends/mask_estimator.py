@@ -6,14 +6,13 @@ from torch.nn import functional as F
 from torch_complex.tensor import ComplexTensor
 
 from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
-from espnet.nets.pytorch_backend.rnn.encoders import RNN
-from espnet.nets.pytorch_backend.rnn.encoders import RNNP
+from espnet.nets.pytorch_backend.rnn.encoders import RNN, RNNP
 
 
 class MaskEstimator(torch.nn.Module):
     def __init__(self, type, idim, layers, units, projs, dropout, nmask=1):
         super().__init__()
-        subsample = np.ones(layers + 1, dtype=np.int)
+        subsample = np.ones(layers + 1, dtype=np.int64)
 
         typ = type.lstrip("vgg").rstrip("p")
         if type[-1] == "p":
@@ -46,7 +45,7 @@ class MaskEstimator(torch.nn.Module):
         xs = xs.permute(0, 2, 3, 1)
 
         # Calculate amplitude: (B, C, T, F) -> (B, C, T, F)
-        xs = (xs.real ** 2 + xs.imag ** 2) ** 0.5
+        xs = (xs.real**2 + xs.imag**2) ** 0.5
         # xs: (B, C, T, F) -> xs: (B * C, T, F)
         xs = xs.contiguous().view(-1, xs.size(-2), xs.size(-1))
         # ilens: (B,) -> ilens_: (B * C)

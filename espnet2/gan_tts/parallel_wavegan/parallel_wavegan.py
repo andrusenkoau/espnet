@@ -9,18 +9,13 @@ This code is modified from https://github.com/kan-bayashi/ParallelWaveGAN.
 
 import logging
 import math
-
-from typing import Any
-from typing import Dict
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
 
 from espnet2.gan_tts.parallel_wavegan import upsample
-from espnet2.gan_tts.wavenet.residual_block import Conv1d
-from espnet2.gan_tts.wavenet.residual_block import Conv1d1x1
-from espnet2.gan_tts.wavenet.residual_block import ResidualBlock
+from espnet2.gan_tts.wavenet.residual_block import Conv1d, Conv1d1x1, ResidualBlock
 
 
 class ParallelWaveGANGenerator(torch.nn.Module):
@@ -196,7 +191,7 @@ class ParallelWaveGANGenerator(torch.nn.Module):
 
     @staticmethod
     def _get_receptive_field_size(
-        layers, stacks, kernel_size, dilation=lambda x: 2 ** x
+        layers, stacks, kernel_size, dilation=lambda x: 2**x
     ):
         assert layers % stacks == 0
         layers_per_cycle = layers // stacks
@@ -289,7 +284,7 @@ class ParallelWaveGANDiscriminator(torch.nn.Module):
             if i == 0:
                 dilation = 1
             else:
-                dilation = i if dilation_factor == 1 else dilation_factor ** i
+                dilation = i if dilation_factor == 1 else dilation_factor**i
                 conv_in_channels = conv_channels
             padding = (kernel_size - 1) // 2 * dilation
             conv_layer = [

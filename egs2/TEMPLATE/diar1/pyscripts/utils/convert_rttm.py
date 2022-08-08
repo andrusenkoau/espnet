@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 
+import argparse
 import collections.abc
-import humanfriendly
+import logging
+import os
+import re
 from pathlib import Path
 from typing import Union
 
-import argparse
-import logging
+import humanfriendly
 import numpy as np
-import re
-import os
 import soundfile
-from espnet2.utils.types import str_or_int
 from typeguard import check_argument_types
+
+from espnet2.utils.types import str_or_int
 
 
 def convert_rttm_text(
@@ -61,13 +62,12 @@ def convert_rttm_text(
                 utt_id, path
             )
 
-            array, rate = soundfile.read(wav_path, always_2d=True)
-            assert rate == sampling_rate
-            shape = array.shape[0]
+            sf = soundfile.SoundFile(wav_path)
+            assert sf.samplerate == sampling_rate
             output_handler.write(
                 (
                     "{} {} <NA> <NA> {} <NA> <NA> <NA> <NA>\n".format(
-                        "END", utt_id, shape
+                        "END", utt_id, sf.frames
                     )
                 )
             )

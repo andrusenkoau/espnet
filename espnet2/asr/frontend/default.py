@@ -1,7 +1,5 @@
 import copy
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import Optional, Tuple, Union
 
 import humanfriendly
 import numpy as np
@@ -9,11 +7,11 @@ import torch
 from torch_complex.tensor import ComplexTensor
 from typeguard import check_argument_types
 
-from espnet.nets.pytorch_backend.frontends.frontend import Frontend
 from espnet2.asr.frontend.abs_frontend import AbsFrontend
 from espnet2.layers.log_mel import LogMel
 from espnet2.layers.stft import Stft
 from espnet2.utils.get_default_kwargs import get_default_kwargs
+from espnet.nets.pytorch_backend.frontends.frontend import Frontend
 
 
 class DefaultFrontend(AbsFrontend):
@@ -109,7 +107,7 @@ class DefaultFrontend(AbsFrontend):
 
         # 4. STFT -> Power spectrum
         # h: ComplexTensor(B, T, F) -> torch.Tensor(B, T, F)
-        input_power = input_stft.real ** 2 + input_stft.imag ** 2
+        input_power = input_stft.real**2 + input_stft.imag**2
 
         # 5. Feature transform e.g. Stft -> Log-Mel-Fbank
         # input_power: (Batch, [Channel,] Length, Freq)

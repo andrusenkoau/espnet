@@ -7,12 +7,16 @@ import numpy as np
 import pytest
 import torch
 
-from espnet2.gan_tts.hifigan import HiFiGANGenerator
-from espnet2.gan_tts.hifigan import HiFiGANMultiScaleMultiPeriodDiscriminator
-from espnet2.gan_tts.hifigan.loss import DiscriminatorAdversarialLoss
-from espnet2.gan_tts.hifigan.loss import FeatureMatchLoss
-from espnet2.gan_tts.hifigan.loss import GeneratorAdversarialLoss
-from espnet2.gan_tts.hifigan.loss import MelSpectrogramLoss
+from espnet2.gan_tts.hifigan import (
+    HiFiGANGenerator,
+    HiFiGANMultiScaleMultiPeriodDiscriminator,
+)
+from espnet2.gan_tts.hifigan.loss import (
+    DiscriminatorAdversarialLoss,
+    FeatureMatchLoss,
+    GeneratorAdversarialLoss,
+    MelSpectrogramLoss,
+)
 
 
 def make_hifigan_generator_args(**kwargs):
@@ -182,19 +186,16 @@ except ImportError:
     not is_parallel_wavegan_available, reason="parallel_wavegan is not installed."
 )
 def test_parallel_wavegan_compatibility():
-    from parallel_wavegan.utils import download_pretrained_model
-    from parallel_wavegan.utils import load_model
+    from parallel_wavegan.models import HiFiGANGenerator as PWGHiFiGANGenerator
 
-    ckpt_path = download_pretrained_model("ljspeech_hifigan.v1")
-    state_dict = torch.load(ckpt_path, map_location="cpu")["model"]["generator"]
-    model_pwg = load_model(ckpt_path)
-    model_espnet2 = HiFiGANGenerator()
-    model_espnet2.load_state_dict(state_dict)
+    model_pwg = PWGHiFiGANGenerator(**make_hifigan_generator_args())
+    model_espnet2 = HiFiGANGenerator(**make_hifigan_generator_args())
+    model_espnet2.load_state_dict(model_pwg.state_dict())
     model_pwg.eval()
     model_espnet2.eval()
 
     with torch.no_grad():
-        c = torch.randn(5, 80)
+        c = torch.randn(3, 5)
         out_pwg = model_pwg.inference(c)
         out_espnet2 = model_espnet2.inference(c)
         np.testing.assert_array_equal(

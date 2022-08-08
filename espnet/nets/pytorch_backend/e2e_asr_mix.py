@@ -8,38 +8,40 @@ Copyright 2017 Johns Hopkins University (Shinji Watanabe)
 """
 
 import argparse
-from itertools import groupby
 import logging
 import math
 import os
 import sys
+from itertools import groupby
 
 import numpy as np
 import six
 import torch
 
 from espnet.nets.asr_interface import ASRInterface
-from espnet.nets.e2e_asr_common import get_vgg2l_odim
-from espnet.nets.e2e_asr_common import label_smoothing_dist
+from espnet.nets.e2e_asr_common import get_vgg2l_odim, label_smoothing_dist
 from espnet.nets.pytorch_backend.ctc import ctc_for
 from espnet.nets.pytorch_backend.e2e_asr import E2E as E2EASR
 from espnet.nets.pytorch_backend.e2e_asr import Reporter
-from espnet.nets.pytorch_backend.frontends.feature_transform import (
-    feature_transform_for,  # noqa: H301
+from espnet.nets.pytorch_backend.frontends.feature_transform import (  # noqa: H301
+    feature_transform_for,
 )
 from espnet.nets.pytorch_backend.frontends.frontend import frontend_for
-from espnet.nets.pytorch_backend.initialization import lecun_normal_init_parameters
-from espnet.nets.pytorch_backend.initialization import set_forget_bias_to_one
-from espnet.nets.pytorch_backend.nets_utils import get_subsample
-from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
-from espnet.nets.pytorch_backend.nets_utils import pad_list
-from espnet.nets.pytorch_backend.nets_utils import to_device
-from espnet.nets.pytorch_backend.nets_utils import to_torch_tensor
+from espnet.nets.pytorch_backend.initialization import (
+    lecun_normal_init_parameters,
+    set_forget_bias_to_one,
+)
+from espnet.nets.pytorch_backend.nets_utils import (
+    get_subsample,
+    make_pad_mask,
+    pad_list,
+    to_device,
+    to_torch_tensor,
+)
 from espnet.nets.pytorch_backend.rnn.attentions import att_for
 from espnet.nets.pytorch_backend.rnn.decoders import decoder_for
+from espnet.nets.pytorch_backend.rnn.encoders import RNNP, VGG2L
 from espnet.nets.pytorch_backend.rnn.encoders import encoder_for as encoder_for_single
-from espnet.nets.pytorch_backend.rnn.encoders import RNNP
-from espnet.nets.pytorch_backend.rnn.encoders import VGG2L
 
 CTC_LOSS_THRESHOLD = 10000
 
@@ -323,7 +325,7 @@ class E2E(ASRInterface, torch.nn.Module):
                             hlens[i // self.num_spkrs],
                             ys_pad[i % self.num_spkrs],
                         )
-                        for i in range(self.num_spkrs ** 2)
+                        for i in range(self.num_spkrs**2)
                     ],
                     dim=1,
                 )  # (B, num_spkrs^2)
@@ -441,13 +443,13 @@ class E2E(ASRInterface, torch.nn.Module):
                     editdistance.eval(
                         hyp_words[ns // self.num_spkrs], ref_words[ns % self.num_spkrs]
                     )
-                    for ns in range(self.num_spkrs ** 2)
+                    for ns in range(self.num_spkrs**2)
                 ]  # h1r1,h1r2,h2r1,h2r2
                 tmp_char_ed = [
                     editdistance.eval(
                         hyp_chars[ns // self.num_spkrs], ref_chars[ns % self.num_spkrs]
                     )
-                    for ns in range(self.num_spkrs ** 2)
+                    for ns in range(self.num_spkrs**2)
                 ]  # h1r1,h1r2,h2r1,h2r2
 
                 word_eds.append(self.pit.min_pit_sample(torch.tensor(tmp_word_ed))[0])
@@ -676,7 +678,7 @@ class E2E(ASRInterface, torch.nn.Module):
                             hlens[i // self.num_spkrs],
                             ys_pad[i % self.num_spkrs],
                         )
-                        for i in range(self.num_spkrs ** 2)
+                        for i in range(self.num_spkrs**2)
                     ],
                     1,
                 )  # (B, num_spkrs^2)
