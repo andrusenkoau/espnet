@@ -67,7 +67,7 @@ class EncoderLayer(nn.Module):
             self.ff_scale = 1.0
         if self.conv_module is not None:
             self.norm_conv = LayerNorm(size)  # for the CNN module
-            self.norm_final = LayerNorm(size)  # for the final output of the block
+            #self.norm_final = LayerNorm(size)  # for the final output of the block
         self.dropout = nn.Dropout(dropout_rate)
         self.size = size
         self.normalize_before = normalize_before
@@ -167,8 +167,8 @@ class EncoderLayer(nn.Module):
         if not self.normalize_before:
             x = self.norm_ff(x)
 
-        if self.conv_module is not None:
-            x = self.norm_final(x)
+        #if self.conv_module is not None:
+        #    x = self.norm_final(x)
 
         if cache is not None:
             x = torch.cat([cache, x], dim=1)
